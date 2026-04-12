@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package tiktokgo;
+
+option go_package = "TikTok/userhandler/hertz_gen;tiktok";
+
+import "api.proto";
+
+// User service for handling user-related operations
+service UserService {
+    // User registration
+    rpc Register(RegisterRequest) returns (RegisterResponse) {
+        option (api.post) = "/tiktok/user/register/";
+    }
+    
+    // User login
+    rpc Login(LoginRequest) returns (LoginResponse) {
+        option (api.post) = "/tiktok/user/login/";
+    }
+    
+    // Get user information
+    rpc GetUserInfo(UserInfoRequest) returns (UserInfoResponse) {
+        option (api.get) = "/tiktok/user/info/";
+    }
+}
+
+message RegisterRequest {
+    string username = 1;
+    string password = 2;
+}
+
+message RegisterResponse {
+    int32 status_code = 1;
+    string status_msg = 2;
+    int64 user_id = 3;
+    int64 token = 4;
+}
+
+message LoginRequest {
+    string username = 1;
+    string password = 2;
+}
+
+message LoginResponse {
+    int32 status_code = 1;
+    string status_msg = 2;
+    int64 user_id = 3;
+    string token = 4;
+}
+
+message UserInfoRequest {
+    int64 user_id = 1;
+    string token = 2;
+}
+
+message UserInfoResponse {
+    int32 status_code = 1;
+    string status_msg = 2;
+    User user = 3;
+}
+
+message User {
+    int64 id = 1;
+    string username = 2;
+    string password = 3;
+    string avatar_url = 4;
+    string created_at = 5;
+    string updated_at = 6;
+    string deleted_at = 7;
+}

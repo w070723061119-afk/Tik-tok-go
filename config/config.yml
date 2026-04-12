@@ -1,0 +1,5 @@
+mysql:
+  dsn: root:yourpassword@tcp(mysql:3306)/tiktok?charset=utf8mb4&parseTime=True&loc=Local
+redis:
+  addr: redis:6379
+  
