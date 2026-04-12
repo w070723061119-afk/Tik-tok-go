@@ -17,25 +17,44 @@ type Configredis struct {
 	Addr string `yaml:"addr"`
 }
 
-func LoadConfig() (*Configmysql, *Configredis, error) {
-	var configmysql Configmysql
-	var configredis Configredis
-	err := viper.ReadInConfig()
-	if err != nil {
-		fmt.Printf("读取配置文件失败: %v", err)
-		return nil, nil, err
+var configLoaded bool
+
+func LoadMysqlConfig() (*Configmysql, error) {
+	if !configLoaded {
+		err := viper.ReadInConfig()
+		if err != nil {
+			fmt.Printf("读取配置文件失败: %v", err)
+			return nil, err
+		}
+		configLoaded = true
 	}
-	err = viper.Unmarshal(&configmysql)
+
+	var configmysql Configmysql
+	err := viper.UnmarshalKey("mysql", &configmysql)
 	if err != nil {
 		fmt.Printf("mysql配置解析失败: %v", err)
-		return nil, nil, err
+		return nil, err
 	}
-	err = viper.Unmarshal(&configredis)
+	return &configmysql, nil
+}
+
+func LoadRedisConfig() (*Configredis, error) {
+	if !configLoaded {
+		err := viper.ReadInConfig()
+		if err != nil {
+			fmt.Printf("读取配置文件失败: %v", err)
+			return nil, err
+		}
+		configLoaded = true
+	}
+
+	var configredis Configredis
+	err := viper.UnmarshalKey("redis", &configredis)
 	if err != nil {
 		fmt.Printf("redis配置解析失败: %v", err)
-		return nil, nil, err
+		return nil, err
 	}
-	return &configmysql, &configredis, err
+	return &configredis, nil
 }
 
 func initDB(config *Configmysql) (*gorm.DB, error) {
@@ -58,24 +77,29 @@ func initRedis(config *Configredis) (*redis.Client, error) { // 在这里使用c
 }
 
 func LoadSQLConfig() (*gorm.DB, *redis.Client, error) {
-	var configmysql *Configmysql
-	var configredis *Configredis
-	configmysql, configredis, err := LoadConfig()
+	mysqlConfig, err := LoadMysqlConfig()
 	if err != nil {
-		fmt.Printf("加载配置失败: %v", err)
+		fmt.Printf("加载MySQL配置失败: %v", err)
 		return nil, nil, err
 	}
 
-	db, err := initDB(configmysql)
+	db, err := initDB(mysqlConfig)
 	if err != nil {
 		fmt.Printf("初始化数据库连接失败: %v", err)
 		return nil, nil, err
 	}
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: configredis.Addr,
-	})
+	redisConfig, err := LoadRedisConfig()
+	if err != nil {
+		fmt.Printf("加载Redis配置失败: %v", err)
+		return nil, nil, err
+	}
+
+	redisClient, err := initRedis(redisConfig)
+	if err != nil {
+		fmt.Printf("初始化Redis连接失败: %v", err)
+		return nil, nil, err
+	}
 
 	return db, redisClient, nil
-
 }

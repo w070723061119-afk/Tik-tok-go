@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package tiktokgo;
 
-option go_package = "TikTok/userhandler/hertz_gen;tiktok";
+option go_package = "TikTok/userhandler;tiktok";
 
 import "api.proto";
 
@@ -10,17 +10,21 @@ import "api.proto";
 service UserService {
     // User registration
     rpc Register(RegisterRequest) returns (RegisterResponse) {
-        option (api.post) = "/tiktok/user/register/";
+        option (api.post) = "/user/register";
     }
     
     // User login
     rpc Login(LoginRequest) returns (LoginResponse) {
-        option (api.post) = "/tiktok/user/login/";
+        option (api.post) = "/user/login";
     }
     
     // Get user information
     rpc GetUserInfo(UserInfoRequest) returns (UserInfoResponse) {
-        option (api.get) = "/tiktok/user/info/";
+        option (api.get) = "/user/info";
+    }
+
+    rpc PostUserPhoto(UserphotoRequest) returns (UserphotoResponse) {
+        option (api.post) = "/user/avatar/upload";
     }
 }
 
@@ -33,7 +37,7 @@ message RegisterResponse {
     int32 status_code = 1;
     string status_msg = 2;
     int64 user_id = 3;
-    int64 token = 4;
+    
 }
 
 message LoginRequest {
@@ -45,25 +49,41 @@ message LoginResponse {
     int32 status_code = 1;
     string status_msg = 2;
     int64 user_id = 3;
-    string token = 4;
+    string refresh_token = 4;
+    string access_token = 5;
 }
 
 message UserInfoRequest {
     int64 user_id = 1;
-    string token = 2;
+    string refresh_token = 2;
 }
 
 message UserInfoResponse {
     int32 status_code = 1;
     string status_msg = 2;
-    User user = 3;
+    Userinfo user = 3;
 }
 
+message UserphotoRequest {
+    int64 user_id = 1;
+    string refresh_token = 2;
+    string photo_url = 3;
+}
+message UserphotoResponse {
+    int32 status_code = 1;
+    string status_msg = 2;
+}
+
+message Userinfo {
+    int64 id = 1;
+    string username = 2;
+    string photo_url = 3;
+}
 message User {
     int64 id = 1;
     string username = 2;
     string password = 3;
-    string avatar_url = 4;
+    string photo_url = 4;
     string created_at = 5;
     string updated_at = 6;
     string deleted_at = 7;

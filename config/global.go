@@ -14,7 +14,8 @@ func init() {
 	if err != nil {
 		panic("加载配置失败: " + err.Error())
 	}
-	if err != Rdb.Ping(Rdb.Context()).Err() {
+	err = Rdb.Ping(Rdb.Context()).Err()
+	if err != nil {
 		panic("连接Redis失败: " + err.Error())
 	}
 }
