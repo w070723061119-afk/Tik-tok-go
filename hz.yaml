@@ -1,0 +1,7 @@
+handler_dir: "biz/handler"
+model_dir: "biz/model"
+router_dir: "biz/router"
+use: "protobuf"
+handler_package: "TikTok/biz/handler"
+
+

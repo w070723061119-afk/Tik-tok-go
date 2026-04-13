@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package tiktokgo;
+package user;
 
-option go_package = "TikTok/userhandler;tiktok";
+option go_package = "TikTok/biz/model/user;user";
 
 import "api.proto";
 
@@ -34,9 +34,8 @@ message RegisterRequest {
 }
 
 message RegisterResponse {
-    int32 status_code = 1;
-    string status_msg = 2;
-    int64 user_id = 3;
+    baseResponse base = 1;
+    string user_id = 3;
     
 }
 
@@ -46,26 +45,23 @@ message LoginRequest {
 }
 
 message LoginResponse {
-    int32 status_code = 1;
-    string status_msg = 2;
-    int64 user_id = 3;
-    string refresh_token = 4;
+    baseResponse base = 1;
+    string user_id = 3;
     string access_token = 5;
 }
 
 message UserInfoRequest {
-    int64 user_id = 1;
-    string refresh_token = 2;
+    string user_id = 1;
+    
 }
 
 message UserInfoResponse {
-    int32 status_code = 1;
-    string status_msg = 2;
+   baseResponse base = 1;
     Userinfo user = 3;
 }
 
 message UserphotoRequest {
-    int64 user_id = 1;
+    string user_id = 1;
     string refresh_token = 2;
     string photo_url = 3;
 }
@@ -75,12 +71,15 @@ message UserphotoResponse {
 }
 
 message Userinfo {
-    int64 id = 1;
+    string id = 1;
     string username = 2;
     string photo_url = 3;
+    string created_at = 4;
+    string updated_at = 5;
+    string deleted_at = 6;
 }
 message User {
-    int64 id = 1;
+    string id = 1;
     string username = 2;
     string password = 3;
     string photo_url = 4;
@@ -88,3 +87,7 @@ message User {
     string updated_at = 6;
     string deleted_at = 7;
 }
+
+message baseResponse {
+    int32 status_code = 1;
+    string status_msg = 2;}

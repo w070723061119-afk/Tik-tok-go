@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package api;
 
+option go_package = "TikTok/biz/model/api;api";
+
 import "google/protobuf/descriptor.proto";
 
-option go_package = "TikTok/api;tiktok";
 
 extend google.protobuf.FieldOptions {
   optional string raw_body = 50101;
@@ -40,3 +41,18 @@ extend google.protobuf.MethodOptions {
 extend google.protobuf.EnumValueOptions {
   optional int32 http_code = 50401;
 }
+
+// Empty service - placeholder for future implementation
+service EmptyService {
+    rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {
+        option (api.get) = "/health";
+    }
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+    int32 status_code = 1;
+    string status_msg = 2;
+}
+

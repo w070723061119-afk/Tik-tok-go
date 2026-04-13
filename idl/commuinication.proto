@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package communication;
+
+option go_package = "TikTok/biz/model/communication;communication";
+
+import "api.proto";
+
+service CommunicationService {
+  rpc Subscribe(SubscribeRequest) returns (SubscribeResponse) {
+    option (api.post) = "/relation/action";
+  }
+  rpc GetSubscriberList(GetSubscriberListRequest) returns (GetSubscriberListResponse) {
+    option (api.get) = "/following/list";
+  }
+  rpc GetFansList(GetFansListRequest) returns (GetFansListResponse) {
+    option (api.get) = "/follower/list";
+  }
+  rpc GetFriendList(GetFriendListRequest) returns (GetFriendListResponse) {
+    option (api.get) = "/friend/list";
+  }
+}
+
+message SubscribeRequest {
+  string target_user_id = 2;
+  int32 action_type = 3; // 1 for subscribe, 0 for unsubscribe
+}
+message SubscribeResponse {
+  baseResponse base_response = 1;
+}
+
+message GetSubscriberListRequest {
+  int64 user_id = 1;
+  int32 page_number = 2;
+  int32 page_size = 3;
+
+}
+
+message GetSubscriberListResponse {
+  baseResponse base_response = 1;
+  repeated Userinfo subscriber_list = 2;
+  int32 subscriber_count = 3;
+}
+
+message GetFansListRequest {
+  int32 page_number = 2;
+  int32 page_size = 3;
+}
+
+message GetFansListResponse {
+  baseResponse base_response = 1;
+  repeated Userinfo fans_list = 2;
+  int32 fans_count = 3;
+}
+message GetFriendListRequest {
+  int32 page_number = 1;
+  int32 page_size = 2;
+}
+message GetFriendListResponse {
+  baseResponse base_response = 1;
+  repeated Userinfo friend_list = 2;
+  int32 friend_count = 3;
+}
+
+message baseResponse {
+  int32 status_code = 1;
+  string status_msg = 2;
+}
+
+message Userinfo{
+    int64 id = 1;
+    string name = 2;
+    string avatar_url = 3;
+}
