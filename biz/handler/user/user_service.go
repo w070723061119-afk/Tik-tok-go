@@ -4,8 +4,14 @@ package user
 
 import (
 	"context"
+	"net/http"
 
 	user "TikTok/biz/model/user"
+	"TikTok/dal/mysql"
+	"TikTok/utils"
+
+	"TikTok/mw/token"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
@@ -37,7 +43,48 @@ func Login(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
+	// 查询用户是否存在
+	var u user.User
+	if err = mysql.Db.Where("username = ? AND deleted_at = ?", req.Username, "0").First(&u).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, user.LoginResponse{
+			Base: &user.BaseResponse{
+				StatusCode: 1,
+				StatusMsg:  "用户名或密码错误",
+			},
+		})
+		return
+	}
+
+	// 验证密码
+	if !utils.CompareHashAndPassword(req.Password, u.Password) {
+		c.JSON(http.StatusInternalServerError, user.LoginResponse{
+			Base: &user.BaseResponse{
+				StatusCode: 1,
+				StatusMsg:  "用户名或密码错误",
+			},
+		})
+		return
+	}
+
+	// 生成 token
+	accesstoken, refreshtoken, err := token.GenerateToken(u.Id, u.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, user.LoginResponse{
+			Base: &user.BaseResponse{
+				StatusCode: 1,
+				StatusMsg:  "生成 token 时发生错误",
+			},
+		})
+		return
+	}
+
 	resp := new(user.LoginResponse)
+	resp.UserId = u.Id
+	resp.AccessToken = token
+	resp.Base = &user.BaseResponse{
+		StatusCode: 0,
+		StatusMsg:  "登录成功",
+	}
 
 	c.JSON(consts.StatusOK, resp)
 }

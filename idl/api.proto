@@ -1,48 +1,82 @@
-syntax = "proto3";
+syntax = "proto2";
 
 package api;
 
+// 注意：这里的路径是 "TikTok/biz/model/api;api"
+// 这意味着生成的 go 代码会在 TikTok/biz/model/api 包下
 option go_package = "TikTok/biz/model/api;api";
 
 import "google/protobuf/descriptor.proto";
 
-
+// --- 字段扩展 (FieldOptions) ---
 extend google.protobuf.FieldOptions {
-  optional string raw_body = 50101;
-  optional string query = 50102;
-  optional string header = 50103;
-  optional string cookie = 50104;
-  optional string body = 50105;
-  optional string path = 50106;
-  optional string vd = 50107;
-  optional string form = 50108;
-  optional string js_conv = 50109;
+    optional string raw_body = 50101;
+    optional string query = 50102;
+    optional string header = 50103;
+    optional string cookie = 50104;
+    optional string body = 50105;
+    optional string path = 50106;
+    optional string vd = 50107;
+    optional string form = 50108;
+    optional string js_conv = 50109;
+    optional string file_name = 50110;
+    optional string none = 50111;
+
+    // 50131~50160 used to extend field option by hz
+    optional string form_compatible = 50131;
+    optional string js_conv_compatible = 50132;
+    optional string file_name_compatible = 50133;
+    optional string none_compatible = 50134;
+    
+    // 核心：GORM 标签支持
+    optional string go_tag = 51001;
 }
 
+// --- 方法扩展 (MethodOptions) ---
 extend google.protobuf.MethodOptions {
-  optional string get = 50201;
-  optional string post = 50202;
-  optional string put = 50203;
-  optional string delete = 50204;
-  optional string patch = 50205;
-  optional string options = 50206;
-  optional string head = 50207;
-  optional string any = 50208;
-  optional string gen_path = 50301;
-  optional string api_version = 50302;
-  optional string tag = 50303;
-  optional string name = 50304;
-  optional string api_level = 50305;
-  optional string serializer = 50306;
-  optional string param = 50307;
-  optional string baseurl = 50308;
+    optional string get = 50201;
+    optional string post = 50202;
+    optional string put = 50203;
+    optional string delete = 50204;
+    optional string patch = 50205;
+    optional string options = 50206;
+    optional string head = 50207;
+    optional string any = 50208;
+    optional string gen_path = 50301;
+    optional string api_version = 50302;
+    optional string tag = 50303;
+    optional string name = 50304;
+    optional string api_level = 50305;
+    optional string serializer = 50306;
+    optional string param = 50307;
+    optional string baseurl = 50308;
+    optional string handler_path = 50309;
+
+    // 50331~50360 used to extend method option by hz
+    optional string handler_path_compatible = 50331;
 }
 
+// --- 枚举值扩展 (EnumValueOptions) ---
+// 修正：你原代码中这个定义出现了两次，这里合并为一个
 extend google.protobuf.EnumValueOptions {
-  optional int32 http_code = 50401;
+    optional int32 http_code = 50401;
 }
 
-// Empty service - placeholder for future implementation
+// --- 服务扩展 (ServiceOptions) ---
+extend google.protobuf.ServiceOptions {
+    optional string base_domain = 50402;
+    // 50731~50760 used to extend service option by hz
+    optional string base_domain_compatible = 50731;
+}
+
+// --- 消息扩展 (MessageOptions) ---
+extend google.protobuf.MessageOptions {
+    optional string reserve = 50830;
+}
+
+// --- 示例服务与消息 (可选) ---
+// 注意：如果你的项目里已经有其他地方定义了 HealthCheck 或 EmptyService，
+// 建议删除下面这部分，否则编译会报 "already defined" 错误。
 service EmptyService {
     rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {
         option (api.get) = "/health";
@@ -52,7 +86,6 @@ service EmptyService {
 message HealthCheckRequest {}
 
 message HealthCheckResponse {
-    int32 status_code = 1;
-    string status_msg = 2;
+    optional int32 status_code = 1; // proto2 建议加上 optional/required
+    optional string status_msg = 2;
 }
-

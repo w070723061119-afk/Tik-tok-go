@@ -26,18 +26,42 @@ service VideoService {
 
 
 message Video {
-    string video_id = 1;
-    string author_id = 2;
-    string video_url = 3;
-    string cover_url = 4;
-    string title = 5;
-    string description = 6;
-    int64 visit_count = 7;
-    int64 like_count = 8;
-    int64 comment_count = 9;
-    string created_at = 10;
-    string updated_at = 11;
-    string deleted_at = 12;
+    string video_id = 1[
+        (api.go_tag) = 'gorm:"primaryKey;type:varchar(25)"'
+    ];
+    string author_id = 2[
+        (api.go_tag) = 'gorm:"type:varchar(25)"'
+    ];
+    string video_url = 3[
+        (api.go_tag) = 'gorm:"type:varchar(255)"'
+    ];
+    string cover_url = 4[
+        (api.go_tag) = 'gorm:"type:varchar(255)"'
+    ];
+    string title = 5[
+        (api.go_tag) = 'gorm:"type:varchar(255)"'
+    ];
+    string description = 6[
+        (api.go_tag) = 'gorm:"type:varchar(255)"'
+    ];
+    int64 visit_count = 7[
+        (api.go_tag) = 'gorm:"type:bigint"'
+    ];
+    int64 like_count = 8[
+        (api.go_tag) = 'gorm:"type:bigint"'
+    ];
+    int64 comment_count = 9[
+        (api.go_tag) = 'gorm:"type:bigint"'
+    ];
+    string created_at = 10[
+        (api.go_tag) = 'gorm:"type:varchar(25)"'
+    ];
+    string updated_at = 11[
+        (api.go_tag) = 'gorm:"type:varchar(25)"'
+    ];
+    string deleted_at = 12[
+        (api.go_tag) = 'gorm:"type:varchar(25)"'
+    ];
 }
 
 message PublishVideoRequest {

@@ -79,15 +79,30 @@ message Userinfo {
     string deleted_at = 6;
 }
 message User {
-    string id = 1;
-    string username = 2;
-    string password = 3;
-    string photo_url = 4;
-    string created_at = 5;
-    string updated_at = 6;
-    string deleted_at = 7;
+    string id = 1[
+        (api.go_tag) = 'gorm:"primaryKey;type:varchar(255)"'
+    ];
+    string username = 2[
+        (api.go_tag) = 'gorm:"unique;type:varchar(255) not null"'
+    ];
+    string password = 3[
+        (api.go_tag) = 'gorm:"type:varchar(255) not null"'
+    ];
+    string photo_url = 4[
+        (api.go_tag) = 'gorm:"type:varchar(255)"'
+    ];
+    string created_at = 5[
+        (api.go_tag) = 'gorm:"type:varchar(25)"'
+    ];
+    string updated_at = 6[
+        (api.go_tag) = 'gorm:"type:varchar(25)"'
+    ];
+    string deleted_at = 7[
+        (api.go_tag) = 'gorm:"type:varchar(25)"'
+    ];
 }
 
 message baseResponse {
     int32 status_code = 1;
-    string status_msg = 2;}
+    string status_msg = 2;
+}

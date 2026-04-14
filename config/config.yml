@@ -2,4 +2,9 @@ mysql:
   dsn: root:yourpassword@tcp(mysql:3306)/tiktok?charset=utf8mb4&parseTime=True&loc=Local
 redis:
   addr: redis:6379
-  
+jwt:
+  jwtsecret: your_jwt_secret
+  accesssecret: your_access_secret
+  refreshtokenexpire: 7200
+  accesstokenexpire: 3600
+  Identitykey: "id"

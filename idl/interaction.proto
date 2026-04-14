@@ -76,14 +76,34 @@ message baseResponse {
   string status_msg = 2;
 }
 message Comment {
-  string id = 1;
-  string user_id = 2;
-  string video_id = 3;
-  string content = 4;
-  string created_at = 5;
-  string updated_at = 6;
-  string deleted_at = 7;
-  string parent_comment_id = 8;
-  string child_comment_id = 9;
-  int32 like_count = 10;
+  string id = 1[
+    (api.go_tag) = 'gorm:"primaryKey;autoIncrement" json:"id,omitempty"'
+  ];
+  string user_id = 2[
+    (api.go_tag) = 'gorm:"type:varchar(25)" json:"user_id,omitempty"'
+  ];
+  string video_id = 3[
+    (api.go_tag) = 'gorm:"type:varchar(25)" json:"video_id,omitempty"'
+  ];
+  string content = 4[
+    (api.go_tag) = 'gorm:"type:varchar(255)" json:"content,omitempty"'
+  ];
+  string created_at = 5[
+    (api.go_tag) = 'gorm:"type:varchar(15)" json:"created_at,omitempty"'
+  ];
+  string updated_at = 6[
+    (api.go_tag) = 'gorm:"type:varchar(15)" json:"updated_at,omitempty"'
+  ];
+  string deleted_at = 7[
+    (api.go_tag) = 'gorm:"type:varchar(15)" json:"deleted_at,omitempty"'
+  ];
+  string parent_comment_id = 8[
+    (api.go_tag) = 'gorm:"type:varchar(25)" json:"parent_comment_id,omitempty"'
+  ];
+  string child_comment_id = 9[
+    (api.go_tag) = 'gorm:"type:varchar(25)" json:"child_comment_id,omitempty"'
+  ];
+  int32 like_count = 10[
+    (api.go_tag) = 'gorm:"type:int" json:"like_count,omitempty"'
+  ];
 }

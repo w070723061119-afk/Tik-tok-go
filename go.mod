@@ -3,12 +3,20 @@ module TikTok
 go 1.24.3
 
 require (
+	github.com/bwmarrin/snowflake v0.3.0
 	github.com/cloudwego/hertz v0.10.4
 	github.com/go-redis/redis/v8 v8.11.5
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/spf13/viper v1.21.0
 	google.golang.org/protobuf v1.34.1
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.1
+)
+
+require (
+	github.com/elastic/pkcs8 v1.0.0 // indirect
+	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
+	golang.org/x/crypto v0.31.0 // indirect
 )
 
 require (
@@ -24,6 +32,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/hertz-contrib/jwt v1.0.4
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
@@ -34,7 +43,7 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/tidwall/gjson v1.14.4 // indirect
+	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
