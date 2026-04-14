@@ -5,7 +5,7 @@ services:
       - "8080:8080"
     volumes:
       - .:/app
-    command: go run main.go
+    command: go run .
     environment:
       - GIN_MODE=release
       - REDIS_ADDR=redis:6379
