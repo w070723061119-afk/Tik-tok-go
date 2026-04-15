@@ -4,6 +4,7 @@ package user
 
 import (
 	"context"
+	"log"
 	"net/http"
 
 	user "TikTok/biz/model/user"
@@ -13,6 +14,7 @@ import (
 	"TikTok/mw/token"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
@@ -26,8 +28,27 @@ func Register(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
-
+	var u user.User
+	u = user.User{
+		Id:       utils.GenerateUserID(),
+		Username: req.Username,
+		Password: utils.HashPassword(req.Password),
+	}
+	if err = mysql.Db.Create(&u).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, user.RegisterResponse{
+			Base: &user.BaseResponse{
+				StatusCode: 1,
+				StatusMsg:  "注册失败",
+			},
+		})
+		return
+	}
 	resp := new(user.RegisterResponse)
+	resp.Base = &user.BaseResponse{
+		StatusCode: 0,
+		StatusMsg:  "注册成功",
+	}
+	resp.UserId = u.Id
 
 	c.JSON(consts.StatusOK, resp)
 }
@@ -45,7 +66,9 @@ func Login(ctx context.Context, c *app.RequestContext) {
 
 	// 查询用户是否存在
 	var u user.User
-	if err = mysql.Db.Where("username = ? AND deleted_at = ?", req.Username, "0").First(&u).Error; err != nil {
+	log.Printf("尝试登录 - 用户名: %s", req.Username)
+	if err = mysql.Db.Where("username = ?", req.Username).First(&u).Error; err != nil {
+
 		c.JSON(http.StatusInternalServerError, user.LoginResponse{
 			Base: &user.BaseResponse{
 				StatusCode: 1,
@@ -56,6 +79,7 @@ func Login(ctx context.Context, c *app.RequestContext) {
 	}
 
 	// 验证密码
+
 	if !utils.CompareHashAndPassword(req.Password, u.Password) {
 		c.JSON(http.StatusInternalServerError, user.LoginResponse{
 			Base: &user.BaseResponse{
@@ -80,12 +104,12 @@ func Login(ctx context.Context, c *app.RequestContext) {
 
 	resp := new(user.LoginResponse)
 	resp.UserId = u.Id
-	resp.AccessToken = token
+	resp.AccessToken = accesstoken
 	resp.Base = &user.BaseResponse{
 		StatusCode: 0,
 		StatusMsg:  "登录成功",
 	}
-
+	c.SetCookie("refresh_token", refreshtoken, 3600*24, "/", "", protocol.CookieSameSite(http.SameSiteLaxMode), true, true)
 	c.JSON(consts.StatusOK, resp)
 }
 

@@ -16,11 +16,11 @@ import (
 func SaveRefreshToken(userId string, refreshToken string, expiiration time.Duration) error {
 	key := "refresh_token:" + userId
 	return myredis.Rdb.Set(context.Background(), key, refreshToken, expiiration).Err()
-}
+} //保存刷新令牌到redis，并设置过期时间，为什么这里可以自动刷新呢？因为redis采用的是key-value的存储方式，每次访问这个key都会重置过期时间，所以只要用户在使用过程中不断访问，就不会过期，只有当用户长时间不使用时才会过期
 func DeleteRefreshToken(userId string) error {
 	key := "refresh_token:" + userId
 	return myredis.Rdb.Del(context.Background(), key).Err()
-}
+} //删除redis中保存的刷新令牌
 
 func CheckRefreshToken(userId string, refreshToken string) (bool, error) {
 	key := "refresh_token:" + userId
@@ -32,7 +32,7 @@ func CheckRefreshToken(userId string, refreshToken string) (bool, error) {
 		return false, err // 其他错误
 	}
 	return storedToken == refreshToken, nil
-}
+} //检查是否存在有效的刷新令牌
 
 func GenerateToken(userId string, username string) (string, string, error) {
 	accessclaims := jwt.MapClaims{
@@ -63,8 +63,7 @@ func GenerateToken(userId string, username string) (string, string, error) {
 		return "", "", err
 	}
 	return accessTokenString, freshTokenString, nil
-
-}
+} //生成token字符串，并保存刷新令牌到redis
 func parseToken(tokenString string) *UserClaims {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte(Jwtconfig.Jwtsecret), nil
@@ -79,7 +78,7 @@ func parseToken(tokenString string) *UserClaims {
 		}
 	}
 	return nil
-}
+} // 解析token字符串，返回用户信息
 
 func RefreshToken(ctx context.Context, req *app.RequestContext) {
 	cookie := req.Cookie("refresh_token")
@@ -170,4 +169,4 @@ func RefreshToken(ctx context.Context, req *app.RequestContext) {
 		"msg":          "令牌刷新成功",
 		"access_token": accessTokenString,
 	})
-}
+} //刷新了令牌

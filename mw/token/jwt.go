@@ -60,7 +60,7 @@ func NewAuthMiddleware() {
 		SigningAlgorithm: "HS256",
 		Timeout:          time.Duration(Jwtconfig.Accesstokenexpire) * time.Second,
 		MaxRefresh:       time.Duration(Jwtconfig.Refreshtokenexpire) * time.Second,
-		IdentityKey:      Jwtconfig.Identitykey,
+		IdentityKey:      "user_id",
 		TokenHeadName:    "Bearer",
 		Unauthorized:     JwtUnauthorized,
 		TokenLookup:      "header:Authorization",

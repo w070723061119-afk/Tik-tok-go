@@ -42,7 +42,7 @@ func Init() error {
 		fmt.Printf("初始化数据库连接失败：%v", err)
 		return err
 	}
-
+	ModelMigrate()
 	configLoaded = true
 	return nil
 }

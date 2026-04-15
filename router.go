@@ -4,12 +4,14 @@ package main
 
 import (
 	handler "TikTok/biz/handler"
+	"TikTok/mw/token"
+
 	"github.com/cloudwego/hertz/pkg/app/server"
 )
 
 // customizeRegister registers customize routers.
 func customizedRegister(r *server.Hertz) {
 	r.GET("/ping", handler.Ping)
-
+	r.POST("/refresh", token.RefreshToken)
 	// your code ...
 }
