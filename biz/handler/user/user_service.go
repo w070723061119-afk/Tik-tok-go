@@ -4,6 +4,7 @@ package user
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -123,8 +124,20 @@ func GetUserInfo(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
+	var u user.User
+	mysql.Db.Where("id = ?", req.UserId).First(&u)
 
 	resp := new(user.UserInfoResponse)
+	resp.User.Id = u.Id
+	resp.User.Username = u.Username
+	resp.User.PhotoUrl = u.PhotoUrl
+	resp.User.CreatedAt = u.CreatedAt
+	resp.User.UpdatedAt = u.UpdatedAt
+	resp.User.DeletedAt = u.DeletedAt
+	resp.Base = &user.BaseResponse{
+		StatusCode: http.StatusOK,
+		StatusMsg:  "获取用户信息成功",
+	}
 
 	c.JSON(consts.StatusOK, resp)
 }
@@ -139,8 +152,29 @@ func PostUserPhoto(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
+	file, err := c.FormFile("data")
+	if err != nil {
+		c.String(consts.StatusBadRequest, err.Error())
+		return
+	}
+	dstfile := fmt.Sprintf("userdata/photo/%d_%s", req.UserId, file.Filename)
+
+	// 保存文件
+	if err = c.SaveUploadedFile(file, dstfile); err != nil {
+		c.String(consts.StatusInternalServerError, "文件保存失败")
+		return
+	}
+	req.PhotoUrl = dstfile
+
+	// 更新用户头像URL
+	if err = mysql.Db.Model(&user.User{}).Where("id = ?", req.UserId).Update("photo_url", req.PhotoUrl).Error; err != nil {
+		c.String(consts.StatusInternalServerError, "更新用户头像URL失败")
+		return
+	}
 
 	resp := new(user.UserphotoResponse)
+	resp.StatusCode = http.StatusOK
+	resp.StatusMsg = "上传头像成功"
 
 	c.JSON(consts.StatusOK, resp)
 }

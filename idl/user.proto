@@ -24,7 +24,7 @@ service UserService {
     }
 
     rpc PostUserPhoto(UserphotoRequest) returns (UserphotoResponse) {
-        option (api.post) = "/user/avatar/upload";
+        option (api.put) = "/user/avatar/upload";
     }
 }
 
