@@ -4,10 +4,18 @@ package video
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"time"
 
 	video "TikTok/biz/model/video"
+	"TikTok/dal/mysql"
+	"TikTok/mw/token"
+	"TikTok/utils"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	"github.com/h2non/filetype"
 )
 
 // PublishVideo .
@@ -20,9 +28,65 @@ func PublishVideo(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
+	videofile, err := c.FormFile("data")
+	if err != nil {
+		c.String(consts.StatusBadRequest, err.Error())
+		return
+	}
+	videobody, err := videofile.Open()
+	if err != nil {
+		c.String(consts.StatusInternalServerError, "无法打开上传的视频文件")
+		return
+	}
+	defer videobody.Close()
+	buf := make([]byte, 261)
+	_, err = videobody.Read(buf)
+	if err != nil {
+		c.String(consts.StatusInternalServerError, "无法读取上传的视频文件")
+		return
+	}
+	if !filetype.IsVideo(buf) {
+		c.String(consts.StatusBadRequest, "上传的文件不是视频格式")
+		return
+	}
+	videotitle := c.PostForm("title")
+	if videotitle == "" {
+		c.String(consts.StatusBadRequest, "视频标题不能为空")
+		return
+	}
+	videodescription := c.PostForm("description")
+	if videodescription == "" {
+		c.String(consts.StatusBadRequest, "视频描述不能为空")
+		return
+	}
+	userclaims := token.ParseToken(req.AccessToken)
+	if userclaims == nil {
+		c.String(consts.StatusUnauthorized, "无效的访问令牌")
+		return
+	}
+	myvideo := video.Video{
+		VideoId:     utils.GenerateVideoID(),
+		AuthorId:    userclaims.UserId,
+		Title:       videotitle,
+		Description: videodescription,
+		CreatedAt:   utils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05"),
+	}
 
+	videourl := fmt.Sprintf("/%s/%s_%s", myvideo.AuthorId, myvideo.VideoId, videofile.Filename)
+	myvideo.VideoUrl = videourl
+	err = c.SaveUploadedFile(videofile, videourl)
+	if err != nil {
+		c.String(consts.StatusInternalServerError, "无法保存上传的视频文件")
+		return
+	}
+	if err := mysql.Db.Create(&myvideo).Error; err != nil {
+		c.String(consts.StatusInternalServerError, "无法保存视频信息到数据库")
+		return
+	}
 	resp := new(video.PublishVideoResponse)
-
+	resp.VideoId = myvideo.VideoId
+	resp.Base.StatusCode = http.StatusOK
+	resp.Base.StatusMsg = "视频发布成功"
 	c.JSON(consts.StatusOK, resp)
 }
 

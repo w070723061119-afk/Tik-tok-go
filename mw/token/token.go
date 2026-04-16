@@ -64,7 +64,7 @@ func GenerateToken(userId string, username string) (string, string, error) {
 	}
 	return accessTokenString, freshTokenString, nil
 } //生成token字符串，并保存刷新令牌到redis
-func parseToken(tokenString string) *UserClaims {
+func ParseToken(tokenString string) *UserClaims {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte(Jwtconfig.Jwtsecret), nil
 	})
@@ -91,7 +91,7 @@ func RefreshToken(ctx context.Context, req *app.RequestContext) {
 		return
 	}
 	oldReshToken := string(cookie)
-	user := parseToken(oldReshToken)
+	user := ParseToken(oldReshToken)
 	if user == nil {
 		req.JSON(401, map[string]interface{}{
 			"code": 401,

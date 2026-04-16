@@ -1,5 +1,8 @@
 FROM  golang:1.26-alpine
 
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GOSUMDB=sum.golang.org
+
 WORKDIR /app
 
 COPY . .

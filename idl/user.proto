@@ -29,8 +29,13 @@ service UserService {
 }
 
 message RegisterRequest {
-    string username = 1;
-    string password = 2;
+    string username = 1[
+        (api.form) = "username"
+    ];
+    string password = 2
+    [
+        (api.form) = "password"
+    ];
 }
 
 message RegisterResponse {
@@ -40,8 +45,12 @@ message RegisterResponse {
 }
 
 message LoginRequest {
-    string username = 1;
-    string password = 2;
+    string username = 1[
+        (api.form) = "username"
+    ];
+    string password = 2[
+        (api.form) = "password"
+    ];
 }
 
 message LoginResponse {
@@ -51,7 +60,9 @@ message LoginResponse {
 }
 
 message UserInfoRequest {
-    string user_id = 1;
+    string user_id = 1[
+        (api.query) = "user_id"
+    ];
     
 }
 

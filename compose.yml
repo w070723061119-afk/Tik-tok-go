@@ -13,6 +13,8 @@ services:
       - MYSQL_USER=tiktok
       - MYSQL_PASSWORD=yourpassword
       - MYSQL_DATABASE=tiktok
+      - GOPROXY=https://goproxy.cn,direct
+      - GOSUMDB=sum.golang.org
     depends_on:
       - redis
       - mysql

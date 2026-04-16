@@ -3,6 +3,8 @@
 package user
 
 import (
+	"TikTok/mw/token"
+
 	"github.com/cloudwego/hertz/pkg/app"
 )
 
@@ -38,5 +40,5 @@ func _avatarMw() []app.HandlerFunc {
 
 func _postuserphotoMw() []app.HandlerFunc {
 	// your code...
-	return nil
+	return []app.HandlerFunc{token.JWT()}
 }

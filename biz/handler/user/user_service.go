@@ -5,8 +5,13 @@ package user
 import (
 	"context"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"log"
 	"net/http"
+	"os"
 
 	user "TikTok/biz/model/user"
 	"TikTok/dal/mysql"
@@ -50,7 +55,10 @@ func Register(ctx context.Context, c *app.RequestContext) {
 		StatusMsg:  "注册成功",
 	}
 	resp.UserId = u.Id
-
+	userdatapath := fmt.Sprintf("userdata/%s/", u.Id)
+	if err := os.MkdirAll(userdatapath, 0755); err != nil {
+		log.Printf("创建用户数据目录失败: %v", err)
+	}
 	c.JSON(consts.StatusOK, resp)
 }
 
@@ -124,8 +132,13 @@ func GetUserInfo(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
+	userid := c.Query("user_id")
+	if userid == "" {
+		c.String(consts.StatusBadRequest, "用户ID不能为空")
+		return
+	}
 	var u user.User
-	mysql.Db.Where("id = ?", req.UserId).First(&u)
+	mysql.Db.Where("id = ?", userid).First(&u)
 
 	resp := new(user.UserInfoResponse)
 	resp.User.Id = u.Id
@@ -157,15 +170,39 @@ func PostUserPhoto(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
-	dstfile := fmt.Sprintf("userdata/photo/%d_%s", req.UserId, file.Filename)
+	dstfile := fmt.Sprintf("userdata/%s/%s_%s", req.UserId, req.UserId, file.Filename)
 
 	// 保存文件
+	photoMaxize := int64(10 << 20) // 10MB
+	if file.Size > photoMaxize {
+		c.String(consts.StatusBadRequest, "文件过大，最大支持10MB")
+		return
+	}
+	fileContent, err := file.Open()
+	if err != nil {
+		c.String(consts.StatusInternalServerError, "无法打开上传的文件")
+		return
+	}
+	defer fileContent.Close()
+	config, format, err := image.DecodeConfig(fileContent)
+	if err != nil {
+		c.String(consts.StatusBadRequest, "无法识别的图片格式")
+		return
+	}
+	if format != "jpeg" && format != "png" && format != "gif" {
+		c.String(consts.StatusBadRequest, "不支持的图片格式，仅支持JPEG、PNG和GIF")
+		return
+	}
+	if config.Width > 5000 || config.Height > 5000 {
+		c.String(consts.StatusBadRequest, "图片尺寸过大，最大支持5000x5000像素")
+		return
+	}
 	if err = c.SaveUploadedFile(file, dstfile); err != nil {
 		c.String(consts.StatusInternalServerError, "文件保存失败")
 		return
 	}
-	req.PhotoUrl = dstfile
-
+	photoUrl := fmt.Sprintf("/%s", req.UserId+dstfile)
+	req.PhotoUrl = photoUrl
 	// 更新用户头像URL
 	if err = mysql.Db.Model(&user.User{}).Where("id = ?", req.UserId).Update("photo_url", req.PhotoUrl).Error; err != nil {
 		c.String(consts.StatusInternalServerError, "更新用户头像URL失败")

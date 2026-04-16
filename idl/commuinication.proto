@@ -22,17 +22,27 @@ service CommunicationService {
 }
 
 message SubscribeRequest {
-  string target_user_id = 2;
-  int32 action_type = 3; // 1 for subscribe, 0 for unsubscribe
+  string target_user_id = 2[
+    (api.form) = "to_user_id"
+  ];
+  int32 action_type = 3[
+    (api.form) = "action_type"
+  ]; // 1 for subscribe, 0 for unsubscribe
 }
 message SubscribeResponse {
   baseResponse base_response = 1;
 }
 
 message GetSubscriberListRequest {
-  int64 user_id = 1;
-  int32 page_number = 2;
-  int32 page_size = 3;
+  int64 user_id = 1[
+    (api.query) = "user_id"
+  ];
+   int32 page_number = 2[
+    (api.query) = "page_number"
+  ];
+  int32 page_size = 3[
+    (api.query) = "page_size"
+  ];
 
 }
 
@@ -43,8 +53,15 @@ message GetSubscriberListResponse {
 }
 
 message GetFansListRequest {
-  int32 page_number = 2;
-  int32 page_size = 3;
+  int32 user_id = 1[
+    (api.query) = "user_id"
+  ];
+   int32 page_number = 2[
+    (api.query) = "page_number"
+  ];
+  int32 page_size = 3[
+    (api.query) = "page_size"
+  ];
 }
 
 message GetFansListResponse {
@@ -53,8 +70,12 @@ message GetFansListResponse {
   int32 fans_count = 3;
 }
 message GetFriendListRequest {
-  int32 page_number = 1;
-  int32 page_size = 2;
+  int32 page_number = 1[
+    (api.query) = "page_number"
+  ];
+  int32 page_size = 2[
+    (api.query) = "page_size"
+  ];
 }
 message GetFriendListResponse {
   baseResponse base_response = 1;
