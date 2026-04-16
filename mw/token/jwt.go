@@ -3,7 +3,7 @@ package token
 import (
 	"TikTok/biz/model/user"
 	"TikTok/dal/mysql"
-	"TikTok/utils"
+	myutils "TikTok/utils"
 	"context"
 
 	"time"
@@ -26,7 +26,7 @@ func JwtAuthenticator(c context.Context, req *app.RequestContext) (interface{}, 
 	}
 	var use user.User
 	mysql.Db.Where("username = ?", loginVals.Username).First(&use)
-	if utils.CompareHashAndPassword(loginVals.Password, use.Password) {
+	if myutils.CompareHashAndPassword(loginVals.Password, use.Password) {
 		return &UserClaims{
 			Username: loginVals.Username,
 			UserId:   use.Id,

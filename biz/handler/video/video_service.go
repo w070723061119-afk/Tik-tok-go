@@ -11,7 +11,7 @@ import (
 	video "TikTok/biz/model/video"
 	"TikTok/dal/mysql"
 	"TikTok/mw/token"
-	"TikTok/utils"
+	myutils "TikTok/utils"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
@@ -65,11 +65,15 @@ func PublishVideo(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	myvideo := video.Video{
-		VideoId:     utils.GenerateVideoID(),
-		AuthorId:    userclaims.UserId,
-		Title:       videotitle,
-		Description: videodescription,
-		CreatedAt:   utils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05"),
+		VideoId:      myutils.GenerateVideoID(),
+		AuthorId:     userclaims.UserId,
+		Title:        videotitle,
+		Description:  videodescription,
+		CreatedAt:    myutils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05"),
+		UpdatedAt:    myutils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05"),
+		CoverUrl:     "",
+		LikeCount:    0,
+		CommentCount: 0,
 	}
 
 	videourl := fmt.Sprintf("/%s/%s_%s", myvideo.AuthorId, myvideo.VideoId, videofile.Filename)
@@ -100,9 +104,32 @@ func GetVideoList(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
+	var videos []video.Video
+	var videoCount int64
+	VideoData := mysql.Db.Model(&video.Video{}).Where("author_id = ?", req.UserId)
+	if err := VideoData.Scopes(mysql.PageSelect(int(req.PageNum), int(req.PageSize))).Find(&videos).Count(&videoCount).Error; err != nil {
+		c.String(consts.StatusInternalServerError, "无法获取视频列表")
+		return
+	}
 
 	resp := new(video.GetVideoListResponse)
-
+	for _, v := range videos {
+		videoInfo := video.Video{
+			VideoId:      v.VideoId,
+			AuthorId:     v.AuthorId,
+			Title:        v.Title,
+			Description:  v.Description,
+			CreatedAt:    v.CreatedAt,
+			UpdatedAt:    v.UpdatedAt,
+			VisitCount:   v.VisitCount,
+			LikeCount:    v.LikeCount,
+			CommentCount: v.CommentCount,
+			VideoUrl:     v.VideoUrl,
+		}
+		resp.Videos = append(resp.Videos, &videoInfo)
+	}
+	resp.Base.StatusCode = http.StatusOK
+	resp.Base.StatusMsg = "获取视频列表成功"
 	c.JSON(consts.StatusOK, resp)
 }
 

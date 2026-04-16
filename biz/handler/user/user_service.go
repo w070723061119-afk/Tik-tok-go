@@ -15,7 +15,7 @@ import (
 
 	user "TikTok/biz/model/user"
 	"TikTok/dal/mysql"
-	"TikTok/utils"
+	myutils "TikTok/utils"
 
 	"TikTok/mw/token"
 
@@ -36,9 +36,9 @@ func Register(ctx context.Context, c *app.RequestContext) {
 	}
 	var u user.User
 	u = user.User{
-		Id:       utils.GenerateUserID(),
+		Id:       myutils.GenerateUserID(),
 		Username: req.Username,
-		Password: utils.HashPassword(req.Password),
+		Password: myutils.HashPassword(req.Password),
 	}
 	if err = mysql.Db.Create(&u).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, user.RegisterResponse{
@@ -89,7 +89,7 @@ func Login(ctx context.Context, c *app.RequestContext) {
 
 	// 验证密码
 
-	if !utils.CompareHashAndPassword(req.Password, u.Password) {
+	if !myutils.CompareHashAndPassword(req.Password, u.Password) {
 		c.JSON(http.StatusInternalServerError, user.LoginResponse{
 			Base: &user.BaseResponse{
 				StatusCode: 1,

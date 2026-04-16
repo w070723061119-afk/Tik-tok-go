@@ -7,6 +7,7 @@ require (
 	github.com/cloudwego/hertz v0.10.4
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/h2non/filetype v1.1.3
 	github.com/spf13/viper v1.21.0
 	google.golang.org/protobuf v1.34.1
 	gorm.io/driver/mysql v1.6.0
@@ -16,7 +17,6 @@ require (
 require (
 	github.com/elastic/pkcs8 v1.0.0 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
-	github.com/h2non/filetype v1.1.3 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
 )
 
