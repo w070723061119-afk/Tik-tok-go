@@ -115,23 +115,14 @@ func GetVideoList(ctx context.Context, c *app.RequestContext) {
 	}
 
 	resp := new(video.GetVideoListResponse)
-	for _, v := range videos {
-		videoInfo := video.Video{
-			VideoId:      v.VideoId,
-			AuthorId:     v.AuthorId,
-			Title:        v.Title,
-			Description:  v.Description,
-			CreatedAt:    v.CreatedAt,
-			UpdatedAt:    v.UpdatedAt,
-			VisitCount:   v.VisitCount,
-			LikeCount:    v.LikeCount,
-			CommentCount: v.CommentCount,
-			VideoUrl:     v.VideoUrl,
-		}
-		resp.Videos = append(resp.Videos, &videoInfo)
+	for i := range videos {
+
+		resp.Videos = append(resp.Videos, &videos[i])
 	}
-	resp.Base.StatusCode = http.StatusOK
-	resp.Base.StatusMsg = "获取视频列表成功"
+	resp.Base = &video.BaseResponse{
+		StatusCode: http.StatusOK,
+		StatusMsg:  "获取视频列表成功",
+	}
 	c.JSON(consts.StatusOK, resp)
 }
 
@@ -145,9 +136,19 @@ func VideoSearch(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
-
+	var videolist []video.Video
+	if err := mysql.Db.Model(&video.Video{}).Where("title LIKE ? OR description LIKE ?", req.Keyword, req.Keyword).Scopes(mysql.PageSelect(int(req.PageNum), int(req.PageSize))).Find(&videolist).Error; err != nil {
+		c.String(consts.StatusInternalServerError, "无法搜索视频")
+		return
+	}
 	resp := new(video.VideoSearchResponse)
-
+	for i := range videolist {
+		resp.Videos = append(resp.Videos, &videolist[i])
+	}
+	resp.Base = &video.BaseResponse{
+		StatusCode: http.StatusOK,
+		StatusMsg:  "搜索视频成功",
+	}
 	c.JSON(consts.StatusOK, resp)
 }
 

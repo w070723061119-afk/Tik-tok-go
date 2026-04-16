@@ -113,6 +113,20 @@ message User {
     ];
 }
 
+message Userfollow{
+    int32 id = 3[
+        (api.go_tag) = 'gorm:"primaryKey;type:int;autoIncrement"'
+    ];
+   string follow_id = 1[
+        (api.go_tag) = 'gorm:"type:char(25)"'
+   ];
+   
+    string user_id = 2[
+        (api.go_tag) = 'gorm:"type:char(25) not null"'
+    ];
+
+}
+
 message baseResponse {
     int32 status_code = 1;
     string status_msg = 2;

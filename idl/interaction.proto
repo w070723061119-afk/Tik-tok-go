@@ -28,6 +28,9 @@ service InteractionService {
 }
 
 message LikeVideoRequest {
+  string user_id = 3[
+    (api.form) = "user_id"
+  ];
   string video_id = 1[
     (api.form) = "video_id"
   ];
@@ -61,7 +64,10 @@ message CommentVideoRequest {
   string comment_id = 1[
     (api.form) = "comment_id"
   ];
-  string comment_text = 2[
+  string video_id = 2[
+    (api.form) = "video_id"
+  ];
+  string comment_text = 3[
     (api.form) = "comment_text"
   ];
 }
@@ -97,6 +103,19 @@ message baseResponse {
   int32 status_code = 1;
   string status_msg = 2;
 }
+
+message ChildComment{
+  int32 id = 3[
+    (api.go_tag) = 'gorm:"primaryKey;autoIncrement" json:"id,omitempty"'
+  ];
+  string father_comment_id = 1[
+    (api.go_tag) = 'gorm:"type:varchar(25)" json:"father_comment_id,omitempty"'
+  ];
+  Comment child_comment = 2[
+    (api.go_tag) = 'gorm:"embbedded;foreignKey:father_comment_id;references:id" json:"child_comment_list,omitempty"'
+  ];
+
+}
 message Comment {
   string id = 1[
     (api.go_tag) = 'gorm:"primaryKey;autoIncrement" json:"id,omitempty"'
@@ -122,9 +141,7 @@ message Comment {
   string parent_comment_id = 8[
     (api.go_tag) = 'gorm:"type:varchar(25)" json:"parent_comment_id,omitempty"'
   ];
-  string child_comment_id = 9[
-    (api.go_tag) = 'gorm:"type:varchar(25)" json:"child_comment_id,omitempty"'
-  ];
+
   int32 like_count = 10[
     (api.go_tag) = 'gorm:"type:int" json:"like_count,omitempty"'
   ];

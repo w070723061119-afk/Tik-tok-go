@@ -4,10 +4,17 @@ package interaction
 
 import (
 	"context"
+	"errors"
+	"net/http"
 
 	interaction "TikTok/biz/model/interaction"
+	"TikTok/biz/model/video"
+	"TikTok/dal/mysql"
+	myredis "TikTok/dal/redis"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	"gorm.io/gorm"
 )
 
 // LikeVideo .
@@ -16,14 +23,106 @@ func LikeVideo(ctx context.Context, c *app.RequestContext) {
 	var err error
 	var req interaction.LikeVideoRequest
 	err = c.BindAndValidate(&req)
+
 	if err != nil {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
+	if req.ActionType != 1 && req.ActionType != 2 {
+		c.String(consts.StatusBadRequest, "invalid action type")
+		return
+	}
+	Likekey := "like:" + "video:" + req.VideoId
+	var videoInfo video.Video
+	Like := myredis.Rdb.Get(context.Background(), Likekey).Val()
+	if Like == "" {
+		// 从数据库中获取点赞数
+		err := mysql.Db.Model(&video.Video{}).Where("VideoId = ?", req.VideoId).First(&videoInfo).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.String(consts.StatusNotFound, "video not found")
+				return
+			}
+			c.String(consts.StatusInternalServerError, "database error")
+			return
+		}
+		Like = string(videoInfo.LikeCount)
+		myredis.Rdb.Set(context.Background(), Likekey, Like, 0)
+	}
+	if req.ActionType == 1 {
+		var like video.VideoLiker
 
-	resp := new(interaction.LikeVideoResponse)
+		result := mysql.Db.Model(&video.VideoLiker{}).
+			Where("user_id = ? AND video_id = ?", req.UserId, req.VideoId).
+			First(&like)
 
-	c.JSON(consts.StatusOK, resp)
+		// 判断查询结果
+		if result.Error == nil {
+			c.String(consts.StatusConflict, "你已经点赞过了")
+			return
+		} else if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			c.String(consts.StatusInternalServerError, "database error")
+			return
+		}
+		// ErrRecordNotFound (未点赞，需要创建)
+
+		//  执行创建
+		newLike := video.VideoLiker{
+			UserId: req.UserId,
+			Video:  like.Video,
+		}
+		createResult := mysql.Db.Model(&video.VideoLiker{}).Create(&newLike)
+
+		if createResult.Error != nil {
+			// 处理创建失败（可能是并发导致的唯一索引冲突）
+			// 如果是唯一索引冲突，也可以视为“已点赞”
+			c.String(consts.StatusConflict, "点赞失败或已点赞")
+			return
+		}
+		if err := myredis.Rdb.Incr(context.Background(), Likekey).Err(); err != nil {
+			c.String(consts.StatusInternalServerError, "redis error")
+			return
+		}
+	} else {
+		// 取消点赞
+		var like video.VideoLiker
+
+		result := mysql.Db.Model(&video.VideoLiker{}).
+			Where("user_id = ? AND video_id = ?", req.UserId, req.VideoId).
+			First(&like)
+
+		// 判断查询结果
+		if result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				c.String(consts.StatusConflict, "你还没有点赞过")
+				return
+			} else {
+				c.String(consts.StatusInternalServerError, "database error")
+				return
+			}
+		} else {
+			deleteResult := mysql.Db.Model(&video.VideoLiker{}).
+				Where("user_id = ? AND video_id = ?", req.UserId, req.VideoId).
+				Delete(&video.VideoLiker{})
+			if deleteResult.Error != nil {
+				c.String(consts.StatusInternalServerError, "database error")
+				return
+			}
+			if err := myredis.Rdb.Decr(context.Background(), Likekey).Err(); err != nil {
+				c.String(consts.StatusInternalServerError, "redis error")
+				return
+			}
+
+		}
+		go mysql.UpdateVideoLikeCount(req.VideoId, myredis.Rdb.Get(context.Background(), Likekey).Val())
+
+		resp := new(interaction.LikeVideoResponse)
+		resp.BaseResponse = &interaction.BaseResponse{
+			StatusCode: http.StatusOK,
+			StatusMsg:  "success",
+		}
+		c.JSON(consts.StatusOK, resp)
+	}
 }
 
 // GetLikeList .
@@ -36,9 +135,20 @@ func GetLikeList(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
-
+	var likeList []video.VideoLiker
+	if err := mysql.Db.Model(&video.VideoLiker{}).Where("user_id = ?", req.UserId).Scopes(mysql.PageSelect(int(req.PageNumber), int(req.PageNumber))).Find(&likeList).Error; err != nil {
+		c.String(consts.StatusInternalServerError, "无法获取点赞列表")
+		return
+	}
 	resp := new(interaction.GetLikeListResponse)
+	for i := range likeList {
 
+		resp.VideoList = append(resp.VideoList, likeList[i].Video)
+	}
+	resp.BaseResponse = &interaction.BaseResponse{
+		StatusCode: http.StatusOK,
+		StatusMsg:  "success",
+	}
 	c.JSON(consts.StatusOK, resp)
 }
 

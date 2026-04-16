@@ -128,6 +128,17 @@ message VideoPopularResponse {
     baseResponse base = 1;
     repeated Video videos = 3;
 }
+message VideoLiker {
+    int32 id = 3[
+        (api.go_tag) = 'gorm:"primaryKey;type:int;autoIncrement"'
+    ];
+    string user_id = 1[
+        (api.go_tag) = 'gorm:"type:char(25)"'
+    ];
+    Video video= 2[
+        (api.go_tag) = 'gorm:"embbedded;foreignKey:VideoId;references:VideoId"'
+    ];
+}
 
 
 message baseResponse {
