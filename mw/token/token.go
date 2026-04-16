@@ -7,6 +7,8 @@ import (
 	myredis "TikTok/dal/redis"
 	"context"
 
+	"strings"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/go-redis/redis/v8"
@@ -65,6 +67,23 @@ func GenerateToken(userId string, username string) (string, string, error) {
 	return accessTokenString, freshTokenString, nil
 } //生成token字符串，并保存刷新令牌到redis
 func ParseToken(tokenString string) *UserClaims {
+	// 1. 去除首尾空格
+	tokenString = strings.TrimSpace(tokenString)
+
+	// 2. 检查并去除 "Bearer " 前缀
+	// 通常标准写法是 "Bearer <token>"，中间有个空格
+	if strings.HasPrefix(tokenString, "Bearer ") {
+		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+	} else {
+		return nil
+	}
+
+	// --- 新增代码结束 ---
+
+	// 如果去除前缀后字符串为空，直接返回
+	if tokenString == "" {
+		return nil
+	}
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte(Jwtconfig.Jwtsecret), nil
 	})

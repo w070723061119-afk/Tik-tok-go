@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	user "TikTok/biz/model/user"
 	"TikTok/dal/mysql"
@@ -36,9 +37,12 @@ func Register(ctx context.Context, c *app.RequestContext) {
 	}
 	var u user.User
 	u = user.User{
-		Id:       myutils.GenerateUserID(),
-		Username: req.Username,
-		Password: myutils.HashPassword(req.Password),
+		Id:        myutils.GenerateUserID(),
+		Username:  req.Username,
+		Password:  myutils.HashPassword(req.Password),
+		CreatedAt: myutils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05"),
+		UpdatedAt: myutils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05"),
+		DeletedAt: "",
 	}
 	if err = mysql.Db.Create(&u).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, user.RegisterResponse{
@@ -128,25 +132,32 @@ func GetUserInfo(ctx context.Context, c *app.RequestContext) {
 	var err error
 	var req user.UserInfoRequest
 	err = c.BindAndValidate(&req)
+	fmt.Println(req.UserId)
+	if req.UserId == "" {
+		c.String(consts.StatusBadRequest, "用户ID不能为空")
+		return
+	}
+	log.Printf("尝试获取用户信息 - 用户ID: %s", req.UserId)
 	if err != nil {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
-	userid := c.Query("user_id")
-	if userid == "" {
-		c.String(consts.StatusBadRequest, "用户ID不能为空")
+
+	var u user.User
+	if err := mysql.Db.Model(&user.User{}).Where("Id = ?", req.UserId).First(&u).Error; err != nil {
+		c.String(consts.StatusInternalServerError, err.Error())
 		return
 	}
-	var u user.User
-	mysql.Db.Where("id = ?", userid).First(&u)
 
 	resp := new(user.UserInfoResponse)
-	resp.User.Id = u.Id
-	resp.User.Username = u.Username
-	resp.User.PhotoUrl = u.PhotoUrl
-	resp.User.CreatedAt = u.CreatedAt
-	resp.User.UpdatedAt = u.UpdatedAt
-	resp.User.DeletedAt = u.DeletedAt
+	resp.User = &user.Userinfo{
+		Id:        u.Id,
+		Username:  u.Username,
+		PhotoUrl:  u.PhotoUrl,
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
+		DeletedAt: u.DeletedAt,
+	}
 	resp.Base = &user.BaseResponse{
 		StatusCode: http.StatusOK,
 		StatusMsg:  "获取用户信息成功",
@@ -201,7 +212,7 @@ func PostUserPhoto(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusInternalServerError, "文件保存失败")
 		return
 	}
-	photoUrl := fmt.Sprintf("/%s", req.UserId+dstfile)
+	photoUrl := fmt.Sprintf("/%s", dstfile)
 	req.PhotoUrl = photoUrl
 	// 更新用户头像URL
 	if err = mysql.Db.Model(&user.User{}).Where("id = ?", req.UserId).Update("photo_url", req.PhotoUrl).Error; err != nil {

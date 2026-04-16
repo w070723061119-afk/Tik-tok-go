@@ -23,4 +23,7 @@ func init() {
 	if err != nil {
 		panic("加载 JWT 配置失败：" + err.Error())
 	}
+	
+	// 初始化 JWT 中间件
+	NewAuthMiddleware()
 }

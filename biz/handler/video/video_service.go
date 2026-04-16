@@ -76,7 +76,7 @@ func PublishVideo(ctx context.Context, c *app.RequestContext) {
 		CommentCount: 0,
 	}
 
-	videourl := fmt.Sprintf("/%s/%s_%s", myvideo.AuthorId, myvideo.VideoId, videofile.Filename)
+	videourl := fmt.Sprintf("userdata/%s/%s_%s", myvideo.AuthorId, myvideo.VideoId, videofile.Filename)
 	myvideo.VideoUrl = videourl
 	err = c.SaveUploadedFile(videofile, videourl)
 	if err != nil {
@@ -89,8 +89,10 @@ func PublishVideo(ctx context.Context, c *app.RequestContext) {
 	}
 	resp := new(video.PublishVideoResponse)
 	resp.VideoId = myvideo.VideoId
-	resp.Base.StatusCode = http.StatusOK
-	resp.Base.StatusMsg = "视频发布成功"
+	resp.Base = &video.BaseResponse{
+		StatusCode: http.StatusOK,
+		StatusMsg:  "视频发布成功",
+	}
 	c.JSON(consts.StatusOK, resp)
 }
 
