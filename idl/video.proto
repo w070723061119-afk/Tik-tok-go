@@ -136,7 +136,7 @@ message VideoLiker {
         (api.go_tag) = 'gorm:"type:char(25)"'
     ];
     Video video= 2[
-        (api.go_tag) = 'gorm:"embbedded;foreignKey:VideoId;references:VideoId"'
+        (api.go_tag) = 'gorm:"embedded;foreignKey:VideoId;references:VideoId"'
     ];
 }
 

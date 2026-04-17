@@ -3,6 +3,8 @@
 package interaction
 
 import (
+	"TikTok/mw/token"
+
 	"github.com/cloudwego/hertz/pkg/app"
 )
 
@@ -18,17 +20,17 @@ func _commentMw() []app.HandlerFunc {
 
 func _deletecommentMw() []app.HandlerFunc {
 	// your code...
-	return nil
+	return []app.HandlerFunc{token.JWT()}
 }
 
 func _getcommentlistMw() []app.HandlerFunc {
 	// your code...
-	return nil
+	return []app.HandlerFunc{token.JWT()}
 }
 
 func _commentvideoMw() []app.HandlerFunc {
 	// your code...
-	return nil
+	return []app.HandlerFunc{token.JWT()}
 }
 
 func _likeMw() []app.HandlerFunc {
@@ -38,7 +40,7 @@ func _likeMw() []app.HandlerFunc {
 
 func _likevideoMw() []app.HandlerFunc {
 	// your code...
-	return nil
+	return []app.HandlerFunc{token.JWT()}
 }
 
 func _getlikelistMw() []app.HandlerFunc {

@@ -74,6 +74,7 @@ message CommentVideoRequest {
 
 message CommentVideoResponse {
   baseResponse base_response = 1;
+  string comment_id = 2;
 }
 message GetCommentListRequest {
   string video_id = 1[
@@ -112,7 +113,7 @@ message ChildComment{
     (api.go_tag) = 'gorm:"type:varchar(25)" json:"father_comment_id,omitempty"'
   ];
   Comment child_comment = 2[
-    (api.go_tag) = 'gorm:"embbedded;foreignKey:father_comment_id;references:id" json:"child_comment_list,omitempty"'
+    (api.go_tag) = 'gorm:"embedded;foreignKey:father_comment_id;references:id" json:"child_comment_list,omitempty"'
   ];
 
 }
@@ -130,13 +131,13 @@ message Comment {
     (api.go_tag) = 'gorm:"type:varchar(255)" json:"content,omitempty"'
   ];
   string created_at = 5[
-    (api.go_tag) = 'gorm:"type:varchar(15)" json:"created_at,omitempty"'
+    (api.go_tag) = 'gorm:"type:varchar(25)" json:"created_at,omitempty"'
   ];
   string updated_at = 6[
-    (api.go_tag) = 'gorm:"type:varchar(15)" json:"updated_at,omitempty"'
+    (api.go_tag) = 'gorm:"type:varchar(25)" json:"updated_at,omitempty"'
   ];
   string deleted_at = 7[
-    (api.go_tag) = 'gorm:"type:varchar(15)" json:"deleted_at,omitempty"'
+    (api.go_tag) = 'gorm:"type:varchar(25)" json:"deleted_at,omitempty"'
   ];
   string parent_comment_id = 8[
     (api.go_tag) = 'gorm:"type:varchar(25)" json:"parent_comment_id,omitempty"'

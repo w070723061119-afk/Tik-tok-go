@@ -109,7 +109,7 @@ func GetVideoList(ctx context.Context, c *app.RequestContext) {
 	var videos []video.Video
 	var videoCount int64
 	VideoData := mysql.Db.Model(&video.Video{}).Where("author_id = ?", req.UserId)
-	if err := VideoData.Scopes(mysql.PageSelect(int(req.PageNum), int(req.PageSize))).Find(&videos).Count(&videoCount).Error; err != nil {
+	if err := VideoData.Count(&videoCount).Scopes(mysql.PageSelect(int(req.PageNum), int(req.PageSize))).Find(&videos).Error; err != nil {
 		c.String(consts.StatusInternalServerError, "无法获取视频列表")
 		return
 	}

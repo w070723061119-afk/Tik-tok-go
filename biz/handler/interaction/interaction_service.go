@@ -5,12 +5,18 @@ package interaction
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
+	"strconv"
+	"time"
 
 	interaction "TikTok/biz/model/interaction"
 	"TikTok/biz/model/video"
 	"TikTok/dal/mysql"
 	myredis "TikTok/dal/redis"
+	myutils "TikTok/utils"
+
+	"TikTok/mw/token"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
@@ -37,7 +43,7 @@ func LikeVideo(ctx context.Context, c *app.RequestContext) {
 	Like := myredis.Rdb.Get(context.Background(), Likekey).Val()
 	if Like == "" {
 		// 从数据库中获取点赞数
-		err := mysql.Db.Model(&video.Video{}).Where("VideoId = ?", req.VideoId).First(&videoInfo).Error
+		err := mysql.Db.Model(&video.Video{}).Where("Video_Id = ?", req.VideoId).First(&videoInfo).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				c.String(consts.StatusNotFound, "video not found")
@@ -46,8 +52,11 @@ func LikeVideo(ctx context.Context, c *app.RequestContext) {
 			c.String(consts.StatusInternalServerError, "database error")
 			return
 		}
-		Like = string(videoInfo.LikeCount)
-		myredis.Rdb.Set(context.Background(), Likekey, Like, 0)
+		Like = strconv.FormatInt(videoInfo.LikeCount, 10)
+		if err = myredis.Rdb.Set(context.Background(), Likekey, Like, 24*time.Hour).Err(); err != nil {
+			c.String(consts.StatusInternalServerError, "设置过期时间失败")
+			return
+		}
 	}
 	if req.ActionType == 1 {
 		var like video.VideoLiker
@@ -67,9 +76,11 @@ func LikeVideo(ctx context.Context, c *app.RequestContext) {
 		// ErrRecordNotFound (未点赞，需要创建)
 
 		//  执行创建
+		var likevideo video.Video
+		mysql.Db.Model(&video.Video{}).Where("video_id = ?", req.VideoId).First(&likevideo)
 		newLike := video.VideoLiker{
 			UserId: req.UserId,
-			Video:  like.Video,
+			Video:  &likevideo,
 		}
 		createResult := mysql.Db.Model(&video.VideoLiker{}).Create(&newLike)
 
@@ -80,49 +91,42 @@ func LikeVideo(ctx context.Context, c *app.RequestContext) {
 			return
 		}
 		if err := myredis.Rdb.Incr(context.Background(), Likekey).Err(); err != nil {
-			c.String(consts.StatusInternalServerError, "redis error")
+			c.String(consts.StatusInternalServerError, "内存点赞失败")
+			log.Println(err)
 			return
 		}
 	} else {
-		// 取消点赞
-		var like video.VideoLiker
 
-		result := mysql.Db.Model(&video.VideoLiker{}).
-			Where("user_id = ? AND video_id = ?", req.UserId, req.VideoId).
-			First(&like)
+		res := mysql.Db.Where("user_id = ? AND video_id = ?", req.UserId, req.VideoId).Delete(&video.VideoLiker{})
 
-		// 判断查询结果
-		if result.Error != nil {
-			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-				c.String(consts.StatusConflict, "你还没有点赞过")
-				return
-			} else {
-				c.String(consts.StatusInternalServerError, "database error")
-				return
-			}
-		} else {
-			deleteResult := mysql.Db.Model(&video.VideoLiker{}).
-				Where("user_id = ? AND video_id = ?", req.UserId, req.VideoId).
-				Delete(&video.VideoLiker{})
-			if deleteResult.Error != nil {
-				c.String(consts.StatusInternalServerError, "database error")
-				return
-			}
-			if err := myredis.Rdb.Decr(context.Background(), Likekey).Err(); err != nil {
-				c.String(consts.StatusInternalServerError, "redis error")
-				return
-			}
-
+		if res.Error != nil {
+			c.String(consts.StatusInternalServerError, "database error")
+			return
 		}
+
+		//  检查是否真的删掉了（RowsAffected 代表受影响的行数）
+		if res.RowsAffected == 0 {
+			// 如果没有受影响的行，说明该用户根本没有点赞记录
+			c.String(consts.StatusConflict, "你还没有点赞过")
+			return
+		}
+
+		if err := myredis.Rdb.Decr(context.Background(), Likekey).Err(); err != nil {
+			// 注意：这里 DB 删成功了但 Redis 减失败了，实际项目中可能需要记录日志或报警
+			c.String(consts.StatusInternalServerError, "点赞取消点赞失败")
+			log.Println(err)
+			return
+		}
+
 		go mysql.UpdateVideoLikeCount(req.VideoId, myredis.Rdb.Get(context.Background(), Likekey).Val())
 
-		resp := new(interaction.LikeVideoResponse)
-		resp.BaseResponse = &interaction.BaseResponse{
-			StatusCode: http.StatusOK,
-			StatusMsg:  "success",
-		}
-		c.JSON(consts.StatusOK, resp)
 	}
+	resp := new(interaction.LikeVideoResponse)
+	resp.BaseResponse = &interaction.BaseResponse{
+		StatusCode: http.StatusOK,
+		StatusMsg:  "success",
+	}
+	c.JSON(consts.StatusOK, resp)
 }
 
 // GetLikeList .
@@ -135,12 +139,17 @@ func GetLikeList(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
+
 	var likeList []video.VideoLiker
-	if err := mysql.Db.Model(&video.VideoLiker{}).Where("user_id = ?", req.UserId).Scopes(mysql.PageSelect(int(req.PageNumber), int(req.PageNumber))).Find(&likeList).Error; err != nil {
+	var likeCount int64
+	if err := mysql.Db.Model(&video.VideoLiker{}).Where("user_id = ?", req.UserId).Scopes(mysql.PageSelect(int(req.PageNumber), int(req.PageSize))).Find(&likeList).Count(&likeCount).Error; err != nil {
 		c.String(consts.StatusInternalServerError, "无法获取点赞列表")
 		return
 	}
+
 	resp := new(interaction.GetLikeListResponse)
+	resp.LikeCount = int32(likeCount)
+
 	for i := range likeList {
 
 		resp.VideoList = append(resp.VideoList, likeList[i].Video)
@@ -162,8 +171,43 @@ func CommentVideo(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
+	accesstoken := c.GetHeader("Authorization")
+
+	claims := token.ParseToken(string(accesstoken))
+	if claims == nil {
+		c.String(consts.StatusUnauthorized, "无效的Token")
+		return
+	}
+	if claims.UserId != req.CommentId {
+		c.String(consts.StatusUnauthorized, "请使用你本人的id去评论")
+		return
+	}
+	var myvideo video.Video
+	if err := mysql.Db.Model(&video.Video{}).Where("video_id = ?", req.VideoId).First(&myvideo).Error; err != nil {
+
+		c.String(consts.StatusNotFound, "视频不存在")
+		return
+	}
+	userId := claims.UserId
+	var myvideocomment interaction.Comment
+	myvideocomment.UserId = userId
+	myvideocomment.VideoId = req.VideoId
+	myvideocomment.Content = req.CommentText
+	myvideocomment.CreatedAt = myutils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05")
+	myvideocomment.UpdatedAt = myutils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05")
+	myvideocomment.DeletedAt = ""
+	myvideocomment.Id = myutils.GenerateCommentID()
+	if err := mysql.Db.Model(&interaction.Comment{}).Create(&myvideocomment).Error; err != nil {
+		c.String(consts.StatusInternalServerError, "无法发布评论")
+		return
+	}
 
 	resp := new(interaction.CommentVideoResponse)
+	resp.CommentId = myvideocomment.Id
+	resp.BaseResponse = &interaction.BaseResponse{
+		StatusCode: http.StatusOK,
+		StatusMsg:  "success",
+	}
 
 	c.JSON(consts.StatusOK, resp)
 }
@@ -178,9 +222,21 @@ func GetCommentList(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
-
+	var commentList []interaction.Comment
+	var commentCount int64
+	if err := mysql.Db.Model(&interaction.Comment{}).Where("video_id = ?", req.VideoId).Scopes(mysql.PageSelect(int(req.PageNumber), int(req.PageSize))).Find(&commentList).Count(&commentCount).Error; err != nil {
+		c.String(consts.StatusInternalServerError, "无法获取评论列表")
+		return
+	}
 	resp := new(interaction.GetCommentListResponse)
-
+	for i := range commentList {
+		resp.CommentList = append(resp.CommentList, &commentList[i])
+	}
+	resp.CommentCount = int32(commentCount)
+	resp.BaseResponse = &interaction.BaseResponse{
+		StatusCode: http.StatusOK,
+		StatusMsg:  "success",
+	}
 	c.JSON(consts.StatusOK, resp)
 }
 
@@ -194,8 +250,37 @@ func DeleteComment(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
+	accesstoken := c.GetHeader("Authorization")
+
+	claims := token.ParseToken(string(accesstoken))
+	if claims == nil {
+		c.String(consts.StatusUnauthorized, "无效的Token")
+		return
+	}
+	userId := claims.UserId
+	var comment interaction.Comment
+	if err := mysql.Db.Model(&interaction.Comment{}).Where("id = ?", req.CommentId).First(&comment).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.String(consts.StatusNotFound, "评论不存在")
+			return
+		}
+		c.String(consts.StatusInternalServerError, "数据库错误")
+		return
+	}
+	if comment.UserId != userId {
+		c.String(consts.StatusForbidden, "你没有权限删除这个评论")
+		return
+	}
+	if err := mysql.Db.Model(&interaction.Comment{}).Where("id = ?", req.CommentId).Delete(&interaction.Comment{}).Error; err != nil {
+		c.String(consts.StatusInternalServerError, "无法删除评论")
+		return
+	}
 
 	resp := new(interaction.DeleteCommentResponse)
+	resp.BaseResponse = &interaction.BaseResponse{
+		StatusCode: http.StatusOK,
+		StatusMsg:  "success",
+	}
 
 	c.JSON(consts.StatusOK, resp)
 }
