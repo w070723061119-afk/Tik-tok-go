@@ -3,11 +3,21 @@
 package communication
 
 import (
+	"TikTok/biz/model/user"
+	"TikTok/dal/mysql"
+	myutils "TikTok/utils"
 	"context"
+	"net/http"
 
 	communication "TikTok/biz/model/communication"
+
+	"errors"
+
+	"time"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	MYSQL "github.com/go-sql-driver/mysql"
 )
 
 // Subscribe .
@@ -20,8 +30,123 @@ func Subscribe(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
+	if req.UserId == "" {
+		c.String(consts.StatusBadRequest, "用户ID不能为空")
+		return
+	}
+	if req.TargetUserId == "" {
+		c.String(consts.StatusBadRequest, "目标用户ID不能为空")
+		return
+	}
+	if req.ActionType != 1 && req.ActionType != 0 {
+		c.String(consts.StatusBadRequest, "操作类型错误")
+		return
+	}
+	if req.UserId == req.TargetUserId {
+		c.String(consts.StatusBadRequest, "不能关注自己")
+		return
+	}
+	var follower user.User
+	var followingUser user.User
+	if mysql.Db.Model(user.User{}).Where("user_id =?", req.UserId).First(&follower).Error != nil {
+		c.String(consts.StatusBadRequest, "用户不存在")
+		return
+	}
+	if mysql.Db.Model(user.User{}).Where("user_id =?", req.TargetUserId).First(&followingUser).Error != nil {
+		c.String(consts.StatusBadRequest, "目标用户不存在")
+		return
+	} //这边性能还能优化,等我找到解决方案
+	if req.ActionType == 1 { //关注
+		if err := mysql.Db.Model(communication.Followers{}).Where("follower_user_id =? and following_user_id =?", req.TargetUserId, req.UserId).First(&communication.Followers{}).Error; err != nil {
+			if err.Error() != "record not found" {
+				c.String(consts.StatusBadRequest, "数据库查询错误")
+				return
+			} else if err.Error() == "record not found" {
+				if mysql.Db.Model(communication.Followers{}).Where("follower_user_id =? and following_user_id =?", req.UserId, req.TargetUserId).First(&communication.Followers{}).Error != nil {
+					mysql.Db.Model(communication.Followers{}).Create(&communication.Followers{
+						FollowerUser: &communication.Userinfo{
+							Id:        req.UserId,
+							Name:      follower.Username,
+							AvatarUrl: follower.PhotoUrl,
+						},
+						FollowingUser: &communication.Userinfo{
+							Id:        req.TargetUserId,
+							Name:      followingUser.Username,
+							AvatarUrl: followingUser.PhotoUrl,
+						},
+						Status:     0,
+						CreateTime: myutils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05"),
+					})
+				}
+			}
+		} else {
+			var followers communication.Followers
+			followers.FollowerUser = &communication.Userinfo{
+				Id:        req.UserId,
+				Name:      follower.Username,
+				AvatarUrl: follower.PhotoUrl,
+			}
+			followers.Status = 1
+			followers.FollowingUser = &communication.Userinfo{
+				Id:        req.TargetUserId,
+				Name:      followingUser.Username,
+				AvatarUrl: followingUser.PhotoUrl,
+			}
+			followers.CreateTime = myutils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05")
+			if err := mysql.Db.Create(&followers).Error; err != nil {
+				// 定义一个变量来接收 MySQL 特有的错误
+				var mysqlErr *MYSQL.MySQLError
+
+				// 尝试将 GORM 的 error 断言为 MySQL 的 MySQLError
+				if errors.As(err, &mysqlErr) {
+					if mysqlErr.Number == 1062 {
+						// 1062 代表 Duplicate entry，即记录已存在
+						c.String(consts.StatusBadRequest, "你们已经是好友了")
+						return
+					}
+				}
+				// 其他数据库错误（如连接断开等）
+				c.String(consts.StatusInternalServerError, "数据库操作错误: "+err.Error())
+				return
+			}
+			if err := mysql.Db.Model(communication.Followers{}).Where("follower_user_id =? and following_user_id =?", req.TargetUserId, req.UserId).Update("status = ?", 1).Error; err != nil {
+				c.String(consts.StatusBadRequest, "数据库查询错误")
+				return
+			}
+		}
+
+	} else if req.ActionType == 0 {
+
+		// 取消关注逻辑
+		// 1. 修正参数顺序：follower 是当前用户，following 是目标用户
+		db := mysql.Db.Model(&communication.Followers{}).
+			Where("follower_id = ? AND following_user_id = ?", req.UserId, req.TargetUserId).
+			Delete(&communication.Followers{})
+
+		// 2. 检查执行过程中是否有系统级错误（如数据库连接断开、SQL语法错误等）
+		if db.Error != nil {
+			// 记录具体错误日志（仅在后端日志中记录，不要返回给前端）
+			// log.Errorf("Delete follow relation failed: %v", db.Error)
+			c.String(consts.StatusInternalServerError, "系统繁忙，请稍后重试")
+			return
+		}
+
+		// 3. 检查是否成功删除了记录
+		if db.RowsAffected == 0 {
+			// 没有记录被删除，说明原本就没有关注关系
+			c.String(consts.StatusBadRequest, "未关注该用户")
+			return
+		}
+
+		// 4. 成功删除
+		c.String(consts.StatusOK, "取消关注成功")
+	}
 
 	resp := new(communication.SubscribeResponse)
+	resp.BaseResponse = &communication.BaseResponse{
+		StatusMsg:  "操作成功",
+		StatusCode: http.StatusOK,
+	}
 
 	c.JSON(consts.StatusOK, resp)
 }
@@ -36,8 +161,40 @@ func GetSubscriberList(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
+	if req.UserId == "" {
+		c.String(consts.StatusBadRequest, "用户ID不能为空")
+		return
+	}
+	if mysql.Db.Model(user.User{}).Where("user_id =?", req.UserId).First(&user.User{}).Error != nil {
+		c.String(consts.StatusBadRequest, "用户不存在")
+		return
+	}
+	var Followers []communication.Followers
 
+	var FollowingCount int64
+	if err := mysql.Db.Model(communication.Followers{}).Where("follower_user_id =?", req.UserId).Count(&FollowingCount).Scopes(mysql.PageSelect(int(req.PageNumber), int(req.PageSize))).Find(&Followers); err != nil {
+		if err.Error.Error() != "record not found" {
+			c.String(consts.StatusBadRequest, "数据库查询错误")
+			return
+		} else if err.Error.Error() == "record not found" {
+			// 没有关注关系
+			c.String(consts.StatusBadRequest, "用户不存在")
+			return
+		}
+	}
 	resp := new(communication.GetSubscriberListResponse)
+	resp.BaseResponse = &communication.BaseResponse{
+		StatusMsg:  "操作成功",
+		StatusCode: http.StatusOK,
+	}
+	resp.SubscriberList = make([]*communication.Userinfo, len(Followers))
+	for i := range Followers {
+		resp.SubscriberList[i] = &communication.Userinfo{
+			Id:        Followers[i].FollowingUser.Id,
+			Name:      Followers[i].FollowingUser.Name,
+			AvatarUrl: Followers[i].FollowingUser.AvatarUrl,
+		}
+	}
 
 	c.JSON(consts.StatusOK, resp)
 }
@@ -54,6 +211,39 @@ func GetFansList(ctx context.Context, c *app.RequestContext) {
 	}
 
 	resp := new(communication.GetFansListResponse)
+	if req.UserId == "" {
+		c.String(consts.StatusBadRequest, "用户ID不能为空")
+		return
+	}
+	if mysql.Db.Model(user.User{}).Where("user_id =?", req.UserId).First(&user.User{}).Error != nil {
+		c.String(consts.StatusBadRequest, "用户不存在")
+		return
+	}
+	var Followers []communication.Followers
+
+	var FollowingCount int64
+	if err := mysql.Db.Model(communication.Followers{}).Where("following_user_id =?", req.UserId).Count(&FollowingCount).Scopes(mysql.PageSelect(int(req.PageNumber), int(req.PageSize))).Find(&Followers); err != nil {
+		if err.Error.Error() != "record not found" {
+			c.String(consts.StatusBadRequest, "数据库查询错误")
+			return
+		} else if err.Error.Error() == "record not found" {
+			// 没有关注关系
+			c.String(consts.StatusBadRequest, "用户不存在")
+			return
+		}
+	}
+	resp.BaseResponse = &communication.BaseResponse{
+		StatusMsg:  "操作成功",
+		StatusCode: http.StatusOK,
+	}
+	resp.FansList = make([]*communication.Userinfo, len(Followers))
+	for i := range Followers {
+		resp.FansList[i] = &communication.Userinfo{
+			Id:        Followers[i].FollowerUser.Id,
+			Name:      Followers[i].FollowerUser.Name,
+			AvatarUrl: Followers[i].FollowerUser.AvatarUrl,
+		}
+	}
 
 	c.JSON(consts.StatusOK, resp)
 }
@@ -62,14 +252,47 @@ func GetFansList(ctx context.Context, c *app.RequestContext) {
 // @router /friend/list [GET]
 func GetFriendList(ctx context.Context, c *app.RequestContext) {
 	var err error
-	var req communication.GetFriendListRequest
+	var req communication.GetFansListRequest
 	err = c.BindAndValidate(&req)
 	if err != nil {
 		c.String(consts.StatusBadRequest, err.Error())
 		return
 	}
 
-	resp := new(communication.GetFriendListResponse)
+	resp := new(communication.GetFansListResponse)
+	if req.UserId == "" {
+		c.String(consts.StatusBadRequest, "用户ID不能为空")
+		return
+	}
+	if mysql.Db.Model(user.User{}).Where("user_id =?", req.UserId).First(&user.User{}).Error != nil {
+		c.String(consts.StatusBadRequest, "用户不存在")
+		return
+	}
+	var Followers []communication.Followers
+
+	var FollowingCount int64
+	if err := mysql.Db.Model(communication.Followers{}).Where("following_user_id =? AND status = ?", req.UserId, 1).Count(&FollowingCount).Scopes(mysql.PageSelect(int(req.PageNumber), int(req.PageSize))).Find(&Followers); err != nil {
+		if err.Error.Error() != "record not found" {
+			c.String(consts.StatusBadRequest, "数据库查询错误")
+			return
+		} else if err.Error.Error() == "record not found" {
+			// 没有关注关系
+			c.String(consts.StatusBadRequest, "用户不存在")
+			return
+		}
+	}
+	resp.BaseResponse = &communication.BaseResponse{
+		StatusMsg:  "操作成功",
+		StatusCode: http.StatusOK,
+	}
+	resp.FansList = make([]*communication.Userinfo, len(Followers))
+	for i := range Followers {
+		resp.FansList[i] = &communication.Userinfo{
+			Id:        Followers[i].FollowerUser.Id,
+			Name:      Followers[i].FollowerUser.Name,
+			AvatarUrl: Followers[i].FollowerUser.AvatarUrl,
+		}
+	}
 
 	c.JSON(consts.StatusOK, resp)
 }

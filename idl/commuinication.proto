@@ -22,6 +22,9 @@ service CommunicationService {
 }
 
 message SubscribeRequest {
+  string user_id = 1[
+    (api.form) = "user_id"
+  ];
   string target_user_id = 2[
     (api.form) = "to_user_id"
   ];
@@ -34,7 +37,7 @@ message SubscribeResponse {
 }
 
 message GetSubscriberListRequest {
-  int64 user_id = 1[
+  string user_id = 1[
     (api.query) = "user_id"
   ];
    int32 page_number = 2[
@@ -53,7 +56,7 @@ message GetSubscriberListResponse {
 }
 
 message GetFansListRequest {
-  int32 user_id = 1[
+  string user_id = 1[
     (api.query) = "user_id"
   ];
    int32 page_number = 2[
@@ -82,6 +85,22 @@ message GetFriendListResponse {
   repeated Userinfo friend_list = 2;
   int32 friend_count = 3;
 }
+message followers{
+  
+  string create_time = 3[
+    (api.go_tag) = 'gorm:"column:create_time"'
+  ];
+  int32 status = 4[
+    (api.go_tag) = 'gorm:"column:status"'
+  ];//status =0 那就是关注了,1就是好友状态
+  Userinfo following_user = 5[
+    (api.go_tag) = 'gorm:"embedded;embeddedPrefix:following_user_"'
+  ];
+  Userinfo follower_user = 1[
+    (api.go_tag) = 'gorm:"embedded;embeddedPrefix:follower_user_"'
+  ];
+
+}
 
 message baseResponse {
   int32 status_code = 1;
@@ -89,7 +108,7 @@ message baseResponse {
 }
 
 message Userinfo{
-    int64 id = 1;
+    string id = 1;
     string name = 2;
     string avatar_url = 3;
 }

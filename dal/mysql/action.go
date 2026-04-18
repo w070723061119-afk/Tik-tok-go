@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"TikTok/biz/model/communication"
 	"TikTok/biz/model/interaction"
 	"TikTok/biz/model/user"
 	"TikTok/biz/model/video"
@@ -23,7 +24,7 @@ func ModelMigrate() {
 	} else {
 		fmt.Printf("video视频数据库迁移成功\n")
 	}
-	if err := Db.AutoMigrate(&user.Userfollow{}); err != nil {
+	if err := Db.AutoMigrate(&communication.Followers{}); err != nil {
 		fmt.Printf("follow关注数据库迁移失败：%v", err)
 		return
 	} else {
