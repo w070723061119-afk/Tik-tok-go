@@ -126,7 +126,12 @@ func LikeVideo(ctx context.Context, c *app.RequestContext) {
 		StatusCode: http.StatusOK,
 		StatusMsg:  "success",
 	}
+
+	// 更新 Redis 排行榜
 	myredis.Rdb.ZIncrBy(ctx, "video_list", 1, req.VideoId)
+	// 更新数据库访问量
+	mysql.UpdateVideoVisitCount(req.VideoId)
+
 	c.JSON(consts.StatusOK, resp)
 }
 
@@ -209,7 +214,11 @@ func CommentVideo(ctx context.Context, c *app.RequestContext) {
 		StatusCode: http.StatusOK,
 		StatusMsg:  "success",
 	}
+
+	// 更新 Redis 排行榜
 	myredis.Rdb.ZIncrBy(ctx, "video_list", 1, req.VideoId)
+	// 更新数据库访问量
+	mysql.UpdateVideoVisitCount(req.VideoId)
 
 	c.JSON(consts.StatusOK, resp)
 }

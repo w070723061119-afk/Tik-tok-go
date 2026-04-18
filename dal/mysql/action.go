@@ -61,3 +61,8 @@ func UpdateVideoLikeCount(videoId string, likeCount string) {
 	strconv.Atoi(likeCount)
 	Db.Model(&video.Video{}).Where("VideoId = ?", videoId).Update("LikeCount", likeCount)
 }
+
+// UpdateVideoVisitCount 简单的数据库更新访问量函数
+func UpdateVideoVisitCount(videoId string) {
+	Db.Model(&video.Video{}).Where("VideoId = ?", videoId).UpdateColumn("visit_count", gorm.Expr("visit_count + ?", 1))
+}

@@ -4,6 +4,7 @@ package video
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -90,10 +91,15 @@ func PublishVideo(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusInternalServerError, "无法保存视频信息到数据库")
 		return
 	}
-	// 将视频 ID 添加到 Redis 排序集合中，按访问量排序
+	// 将整个视频结构体 JSON 序列化后存入 Redis
+	videoJSON, err := json.Marshal(myvideo)
+	if err != nil {
+		c.String(consts.StatusInternalServerError, "视频序列化失败")
+		return
+	}
 	myredis.Rdb.ZAdd(ctx, "video_list", &redis.Z{
 		Score:  float64(myvideo.VisitCount),
-		Member: myvideo.VideoId,
+		Member: string(videoJSON),
 	})
 	resp := new(video.PublishVideoResponse)
 	resp.VideoId = myvideo.VideoId
@@ -152,8 +158,10 @@ func VideoSearch(ctx context.Context, c *app.RequestContext) {
 	resp := new(video.VideoSearchResponse)
 	for i := range videolist {
 		resp.Videos = append(resp.Videos, &videolist[i])
-		//增加视频访问量
+		// 增加视频访问量
 		myredis.Rdb.ZIncrBy(ctx, "video_list", 1, videolist[i].VideoId)
+		// 更新数据库访问量
+		mysql.UpdateVideoVisitCount(videolist[i].VideoId)
 	}
 	resp.Base = &video.BaseResponse{
 		StatusCode: http.StatusOK,
@@ -177,23 +185,72 @@ func VideoPopular(ctx context.Context, c *app.RequestContext) {
 	if req.PageNum > 0 {
 		offset = int64((req.PageNum - 1) * req.PageSize)
 	}
-	// 从 Redis 获取热门视频 ID 列表
-	popularvideo, _ := myredis.Rdb.ZRevRangeWithScores(ctx, "video_list", offset, offset+int64(req.PageSize)-1).Result()
+
+	cacheKey := fmt.Sprintf("popular_video:%d:%d", offset, req.PageSize)
+
+	// 1. 先尝试从缓存获取
+	cachedData, err := myredis.Rdb.Get(ctx, cacheKey).Bytes()
+	if err == nil && len(cachedData) > 0 {
+		// 缓存命中，直接反序列化返回
+		resp := new(video.VideoPopularResponse)
+		if err := json.Unmarshal(cachedData, resp); err == nil {
+			resp.Base = &video.BaseResponse{
+				StatusCode: http.StatusOK,
+				StatusMsg:  "获取热门视频成功 (缓存)",
+			}
+			c.JSON(consts.StatusOK, resp)
+			return
+		}
+	}
+
+	// 2. 缓存未命中，从 Redis ZSet 获取热门视频列表（包含完整的视频数据）
+	popularvideo, err := myredis.Rdb.ZRevRangeWithScores(ctx, "video_list", offset, offset+int64(req.PageSize)-1).Result()
 
 	resp := new(video.VideoPopularResponse)
-	resp.Videos = make([]*video.Video, 0, len(popularvideo))
+	resp.Videos = make([]*video.Video, 0)
 
-	// 根据视频 ID 从数据库获取视频详情
-	for _, z := range popularvideo {
-		videoID, ok := z.Member.(string)
-		if !ok {
-			continue
-		}
+	// 如果 Redis ZSet 中没有数据或出错，从数据库查询
+	if err != nil || len(popularvideo) == 0 {
+		// 从数据库按访问量排序查询热门视频
+		var videos []video.Video
+		if err := mysql.Db.Model(&video.Video{}).
+			Order("visit_count DESC").
+			Offset(int(offset)).
+			Limit(int(req.PageSize)).
+			Find(&videos).Error; err == nil {
+			// 将数据库查询结果转换为视频指针列表
+			for i := range videos {
+				resp.Videos = append(resp.Videos, &videos[i])
+			}
 
-		var v video.Video
-		if err := mysql.Db.Where("video_id = ?", videoID).First(&v).Error; err == nil {
-			resp.Videos = append(resp.Videos, &v)
+			// 将数据库查询结果重新写入 Redis ZSet
+			for i := range videos {
+				videoJSON, _ := json.Marshal(videos[i])
+				myredis.Rdb.ZAdd(ctx, "video_list", &redis.Z{
+					Score:  float64(videos[i].VisitCount),
+					Member: string(videoJSON),
+				})
+			}
 		}
+	} else {
+		// 直接从 Redis 中的 JSON 字符串反序列化视频数据
+		for _, z := range popularvideo {
+			videoStr, ok := z.Member.(string)
+			if !ok {
+				continue
+			}
+
+			var v video.Video
+			if err := json.Unmarshal([]byte(videoStr), &v); err == nil {
+				resp.Videos = append(resp.Videos, &v)
+			}
+		}
+	}
+
+	// 3. 写入缓存，设置 24 小时过期时间
+	if len(resp.Videos) > 0 {
+		cacheData, _ := json.Marshal(resp)
+		myredis.Rdb.Set(ctx, cacheKey, cacheData, 24*time.Hour)
 	}
 
 	resp.Base = &video.BaseResponse{
