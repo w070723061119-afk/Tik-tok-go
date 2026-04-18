@@ -126,6 +126,7 @@ func LikeVideo(ctx context.Context, c *app.RequestContext) {
 		StatusCode: http.StatusOK,
 		StatusMsg:  "success",
 	}
+	myredis.Rdb.ZIncrBy(ctx, "video_list", 1, req.VideoId)
 	c.JSON(consts.StatusOK, resp)
 }
 
@@ -208,6 +209,7 @@ func CommentVideo(ctx context.Context, c *app.RequestContext) {
 		StatusCode: http.StatusOK,
 		StatusMsg:  "success",
 	}
+	myredis.Rdb.ZIncrBy(ctx, "video_list", 1, req.VideoId)
 
 	c.JSON(consts.StatusOK, resp)
 }

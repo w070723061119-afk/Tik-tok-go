@@ -215,6 +215,20 @@ func PostUserPhoto(ctx context.Context, c *app.RequestContext) {
 	photoUrl := fmt.Sprintf("/%s", dstfile)
 	req.PhotoUrl = photoUrl
 	// 更新用户头像URL
+	var u user.User
+	if err = mysql.Db.Model(&user.User{}).Where("id = ?", req.UserId).First(&u).Error; err != nil {
+		c.String(consts.StatusInternalServerError, "用户不存在")
+		return
+	}
+	if u.PhotoUrl != "" {
+		oldPhotoPath := u.PhotoUrl[1:] // 去掉前面的斜杠
+		if err = os.Remove(oldPhotoPath); err != nil {
+			log.Printf("删除旧头像失败: %v", err)
+			c.String(consts.StatusInternalServerError, "无法删除旧头像")
+			return
+		}
+		c.String(consts.StatusOK, "上传新头像成功，旧头像已被删除")
+	}
 	if err = mysql.Db.Model(&user.User{}).Where("id = ?", req.UserId).Update("photo_url", req.PhotoUrl).Error; err != nil {
 		c.String(consts.StatusInternalServerError, "更新用户头像URL失败")
 		return

@@ -10,11 +10,13 @@ import (
 
 	video "TikTok/biz/model/video"
 	"TikTok/dal/mysql"
+	myredis "TikTok/dal/redis"
 	"TikTok/mw/token"
 	myutils "TikTok/utils"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	"github.com/go-redis/redis/v8"
 	"github.com/h2non/filetype"
 )
 
@@ -71,6 +73,7 @@ func PublishVideo(ctx context.Context, c *app.RequestContext) {
 		Description:  videodescription,
 		CreatedAt:    myutils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05"),
 		UpdatedAt:    myutils.TsToStr(time.Now().Unix(), "2006-01-02 15:04:05"),
+		VisitCount:   0,
 		CoverUrl:     "",
 		LikeCount:    0,
 		CommentCount: 0,
@@ -87,6 +90,11 @@ func PublishVideo(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusInternalServerError, "无法保存视频信息到数据库")
 		return
 	}
+	// 将视频 ID 添加到 Redis 排序集合中，按访问量排序
+	myredis.Rdb.ZAdd(ctx, "video_list", &redis.Z{
+		Score:  float64(myvideo.VisitCount),
+		Member: myvideo.VideoId,
+	})
 	resp := new(video.PublishVideoResponse)
 	resp.VideoId = myvideo.VideoId
 	resp.Base = &video.BaseResponse{
@@ -137,13 +145,15 @@ func VideoSearch(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	var videolist []video.Video
-	if err := mysql.Db.Model(&video.Video{}).Where("title LIKE ? OR description LIKE ?", req.Keyword, req.Keyword).Scopes(mysql.PageSelect(int(req.PageNum), int(req.PageSize))).Find(&videolist).Error; err != nil {
+	if err := mysql.Db.Model(&video.Video{}).Where("title LIKE ? OR description LIKE ?", "%"+req.Keyword+"%", "%"+req.Keyword+"%").Scopes(mysql.PageSelect(int(req.PageNum), int(req.PageSize))).Find(&videolist).Error; err != nil {
 		c.String(consts.StatusInternalServerError, "无法搜索视频")
 		return
 	}
 	resp := new(video.VideoSearchResponse)
 	for i := range videolist {
 		resp.Videos = append(resp.Videos, &videolist[i])
+		//增加视频访问量
+		myredis.Rdb.ZIncrBy(ctx, "video_list", 1, videolist[i].VideoId)
 	}
 	resp.Base = &video.BaseResponse{
 		StatusCode: http.StatusOK,
@@ -163,7 +173,32 @@ func VideoPopular(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	resp := new(video.VideoPopularResponse)
+	var offset int64 = 0
+	if req.PageNum > 0 {
+		offset = int64((req.PageNum - 1) * req.PageSize)
+	}
+	// 从 Redis 获取热门视频 ID 列表
+	popularvideo, _ := myredis.Rdb.ZRevRangeWithScores(ctx, "video_list", offset, offset+int64(req.PageSize)-1).Result()
 
+	resp := new(video.VideoPopularResponse)
+	resp.Videos = make([]*video.Video, 0, len(popularvideo))
+
+	// 根据视频 ID 从数据库获取视频详情
+	for _, z := range popularvideo {
+		videoID, ok := z.Member.(string)
+		if !ok {
+			continue
+		}
+
+		var v video.Video
+		if err := mysql.Db.Where("video_id = ?", videoID).First(&v).Error; err == nil {
+			resp.Videos = append(resp.Videos, &v)
+		}
+	}
+
+	resp.Base = &video.BaseResponse{
+		StatusCode: http.StatusOK,
+		StatusMsg:  "获取热门视频成功",
+	}
 	c.JSON(consts.StatusOK, resp)
 }
