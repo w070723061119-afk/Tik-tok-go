@@ -3,6 +3,8 @@
 package communication
 
 import (
+	"TikTok/mw/token"
+
 	"github.com/cloudwego/hertz/pkg/app"
 )
 
@@ -13,7 +15,7 @@ func rootMw() []app.HandlerFunc {
 
 func _followerMw() []app.HandlerFunc {
 	// your code...
-	return nil
+	return []app.HandlerFunc{token.JWT()}
 }
 
 func _getfanslistMw() []app.HandlerFunc {

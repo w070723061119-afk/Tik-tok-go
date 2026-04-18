@@ -188,7 +188,6 @@ func VideoPopular(ctx context.Context, c *app.RequestContext) {
 
 	cacheKey := fmt.Sprintf("popular_video:%d:%d", offset, req.PageSize)
 
-	// 1. 先尝试从缓存获取
 	cachedData, err := myredis.Rdb.Get(ctx, cacheKey).Bytes()
 	if err == nil && len(cachedData) > 0 {
 		// 缓存命中，直接反序列化返回
@@ -203,7 +202,7 @@ func VideoPopular(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 
-	// 2. 缓存未命中，从 Redis ZSet 获取热门视频列表（包含完整的视频数据）
+	// 缓存未命中，从 Redis ZSet 获取热门视频列表（包含完整的视频数据）
 	popularvideo, err := myredis.Rdb.ZRevRangeWithScores(ctx, "video_list", offset, offset+int64(req.PageSize)-1).Result()
 
 	resp := new(video.VideoPopularResponse)
@@ -218,7 +217,7 @@ func VideoPopular(ctx context.Context, c *app.RequestContext) {
 			Offset(int(offset)).
 			Limit(int(req.PageSize)).
 			Find(&videos).Error; err == nil {
-			// 将数据库查询结果转换为视频指针列表
+
 			for i := range videos {
 				resp.Videos = append(resp.Videos, &videos[i])
 			}
@@ -247,7 +246,7 @@ func VideoPopular(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 
-	// 3. 写入缓存，设置 24 小时过期时间
+	//  写入缓存，设置 24 小时过期时间
 	if len(resp.Videos) > 0 {
 		cacheData, _ := json.Marshal(resp)
 		myredis.Rdb.Set(ctx, cacheKey, cacheData, 24*time.Hour)
