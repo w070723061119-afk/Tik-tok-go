@@ -38,11 +38,70 @@ func LikeVideo(ctx context.Context, c *app.RequestContext) {
 		c.String(consts.StatusBadRequest, "invalid action type")
 		return
 	}
-	Likekey := "like:" + "video:" + req.VideoId
-	var videoInfo video.Video
-	Like := myredis.Rdb.Get(context.Background(), Likekey).Val()
-	if Like == "" {
-		// 从数据库中获取点赞数
+
+	Likekey := "like:video:" + req.VideoId
+	LikeUserKey := "like:users:" + req.VideoId
+
+	// 第一层：缓存命中，直接操作 Redis
+	Like, err := myredis.Rdb.Get(context.Background(), Likekey).Result()
+	if err == nil && Like != "" {
+		// 缓存命中，直接处理点赞/取消点赞
+		if req.ActionType == 1 {
+			// 检查用户是否已经点赞（使用 Redis SET）
+			isLiked, _ := myredis.Rdb.SIsMember(context.Background(), LikeUserKey, req.UserId).Result()
+			if isLiked {
+				c.String(consts.StatusConflict, "你已经点赞过了")
+				return
+			}
+
+			// 更新 Redis 缓存
+			if err := myredis.Rdb.Incr(context.Background(), Likekey).Err(); err != nil {
+				c.String(consts.StatusInternalServerError, "内存点赞失败")
+				log.Println(err)
+				return
+			}
+
+			myredis.Rdb.SAdd(context.Background(), LikeUserKey, req.UserId)
+
+			// 异步写入数据库
+			go func() {
+				var likevideo video.Video
+				mysql.Db.Model(&video.Video{}).Where("video_id = ?", req.VideoId).First(&likevideo)
+				newLike := video.VideoLiker{
+					UserId: req.UserId,
+					Video:  &likevideo,
+				}
+				mysql.Db.Model(&video.VideoLiker{}).Create(&newLike)
+			}()
+		} else {
+			// 检查用户是否点赞过
+			isLiked, _ := myredis.Rdb.SIsMember(context.Background(), LikeUserKey, req.UserId).Result()
+			if !isLiked {
+				c.String(consts.StatusConflict, "你还没有点赞过")
+				return
+			}
+
+			// 更新 Redis 缓存
+			if err := myredis.Rdb.Decr(context.Background(), Likekey).Err(); err != nil {
+				c.String(consts.StatusInternalServerError, "取消点赞失败")
+				log.Println(err)
+				return
+			}
+
+			// 从点赞集合中移除用户
+			myredis.Rdb.SRem(context.Background(), LikeUserKey, req.UserId)
+
+			// 异步删除数据库记录
+			go func() {
+				mysql.Db.Where("user_id = ? AND video_id = ?", req.UserId, req.VideoId).Delete(&video.VideoLiker{})
+			}()
+		}
+
+		// 异步更新数据库点赞数
+		go mysql.UpdateVideoLikeCount(req.VideoId, myredis.Rdb.Get(context.Background(), Likekey).Val())
+	} else {
+		//：缓存未命中，从数据库获取并写入缓存
+		var videoInfo video.Video
 		err := mysql.Db.Model(&video.Video{}).Where("Video_Id = ?", req.VideoId).First(&videoInfo).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -52,79 +111,25 @@ func LikeVideo(ctx context.Context, c *app.RequestContext) {
 			c.String(consts.StatusInternalServerError, "database error")
 			return
 		}
+
+		// 写入 Redis 缓存（24小时过期）
 		Like = strconv.FormatInt(videoInfo.LikeCount, 10)
 		if err = myredis.Rdb.Set(context.Background(), Likekey, Like, 24*time.Hour).Err(); err != nil {
-			c.String(consts.StatusInternalServerError, "设置过期时间失败")
-			return
-		}
-	}
-	if req.ActionType == 1 {
-		var like video.VideoLiker
-
-		result := mysql.Db.Model(&video.VideoLiker{}).
-			Where("user_id = ? AND video_id = ?", req.UserId, req.VideoId).
-			First(&like)
-
-		// 判断查询结果
-		if result.Error == nil {
-			c.String(consts.StatusConflict, "你已经点赞过了")
-			return
-		} else if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			c.String(consts.StatusInternalServerError, "database error")
-			return
-		}
-		// ErrRecordNotFound (未点赞，需要创建)
-
-		//  执行创建
-		var likevideo video.Video
-		mysql.Db.Model(&video.Video{}).Where("video_id = ?", req.VideoId).First(&likevideo)
-		newLike := video.VideoLiker{
-			UserId: req.UserId,
-			Video:  &likevideo,
-		}
-		createResult := mysql.Db.Model(&video.VideoLiker{}).Create(&newLike)
-
-		if createResult.Error != nil {
-			// 处理创建失败（可能是并发导致的唯一索引冲突）
-			// 如果是唯一索引冲突，也可以视为“已点赞”
-			c.String(consts.StatusConflict, "点赞失败或已点赞")
-			return
-		}
-		if err := myredis.Rdb.Incr(context.Background(), Likekey).Err(); err != nil {
-			c.String(consts.StatusInternalServerError, "内存点赞失败")
-			log.Println(err)
-			return
-		}
-	} else {
-
-		res := mysql.Db.Where("user_id = ? AND video_id = ?", req.UserId, req.VideoId).Delete(&video.VideoLiker{})
-
-		if res.Error != nil {
-			c.String(consts.StatusInternalServerError, "database error")
+			c.String(consts.StatusInternalServerError, "设置缓存失败")
 			return
 		}
 
-		//  检查是否真的删掉了（RowsAffected 代表受影响的行数）
-		if res.RowsAffected == 0 {
-			// 如果没有受影响的行，说明该用户根本没有点赞记录
-			c.String(consts.StatusConflict, "你还没有点赞过")
-			return
+		// 从数据库加载点赞用户列表到
+		var likeUsers []video.VideoLiker
+		mysql.Db.Model(&video.VideoLiker{}).Where("video_id = ?", req.VideoId).Find(&likeUsers)
+		for _, user := range likeUsers {
+			myredis.Rdb.SAdd(context.Background(), LikeUserKey, user.UserId)
 		}
+		myredis.Rdb.Expire(context.Background(), LikeUserKey, 24*time.Hour)
 
-		if err := myredis.Rdb.Decr(context.Background(), Likekey).Err(); err != nil {
-			// 注意：这里 DB 删成功了但 Redis 减失败了，实际项目中可能需要记录日志或报警
-			c.String(consts.StatusInternalServerError, "点赞取消点赞失败")
-			log.Println(err)
-			return
-		}
-
-		go mysql.UpdateVideoLikeCount(req.VideoId, myredis.Rdb.Get(context.Background(), Likekey).Val())
-
-	}
-	resp := new(interaction.LikeVideoResponse)
-	resp.BaseResponse = &interaction.BaseResponse{
-		StatusCode: http.StatusOK,
-		StatusMsg:  "success",
+		// 递归调用，此时缓存已命中，走第一层逻辑
+		LikeVideo(ctx, c)
+		return
 	}
 
 	// 更新 Redis 排行榜
@@ -132,6 +137,11 @@ func LikeVideo(ctx context.Context, c *app.RequestContext) {
 	// 更新数据库访问量
 	mysql.UpdateVideoVisitCount(req.VideoId)
 
+	resp := new(interaction.LikeVideoResponse)
+	resp.BaseResponse = &interaction.BaseResponse{
+		StatusCode: http.StatusOK,
+		StatusMsg:  "success",
+	}
 	c.JSON(consts.StatusOK, resp)
 }
 
